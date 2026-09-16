@@ -51,11 +51,9 @@ types_parser.cmo: types_parser.ml types_parser.cmi ocamlTypes.cmo ocamlTypes.cmi
 types_lexer.cmo: types_lexer.ml types_parser.cmo
 ocamlTypes.cmo: ocamlTypes.ml
 
+# Collect the traces of the examples, then compare them against the expected
+# traces in examples/*.answer .
 test: $(TEST_OUTPUTS)
-
-# Compare the traces that 'make test' generated against the expected traces in
-# examples/*.answer .
-check: test
 	HOLLIGHT_DIR=$(HOLLIGHT_DIR) ./check-answers.sh
 
 examples/%.outdir: examples/%.ml tracer
@@ -71,4 +69,4 @@ clean:
 	rm -f *.cmo *.cmi tracer types_test types_parser.ml types_parser.mli types_lexer.ml kernel_wrapper.ml
 	rm -rf $(TEST_OUTPUTS) examples/*.cm* examples/*_inlined* examples/*.o examples/*.hollog examples/*.native
 
-.PHONY: all clean test check
+.PHONY: all clean test

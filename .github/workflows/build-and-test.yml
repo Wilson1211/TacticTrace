@@ -114,7 +114,7 @@ jobs:
         working-directory: hol-light
         run: |
           set -xe
-          make check -C TacticTrace
+          make test -C TacticTrace
 
       - name: Upload the collected traces and HOL Light logs
         if: always()

@@ -15,6 +15,17 @@ if [ ! -d "$HOLLIGHT_DIR" ]; then
   exit 1
 fi
 
+# Collecting traces at all needs HOL Light built with HOLLIGHT_USE_MODULE=1, so
+# 'make test' skips the examples without it. Skip the comparison in that case
+# too, rather than failing over traces that were never meant to be produced.
+# (The CI workflow asserts on HOLLIGHT_USE_MODULE separately, so this cannot
+# quietly turn the whole test into a no-op there.)
+if [ "$("$HOLLIGHT_DIR"/hol.sh -use-module)" != "1" ]; then
+  echo "SKIP: HOL Light at $HOLLIGHT_DIR was not built with HOLLIGHT_USE_MODULE=1,"
+  echo "      so no traces were collected and there is nothing to compare."
+  exit 0
+fi
+
 # $HOLLIGHT_DIR may be non-canonical (the Makefile passes '<...>/TacticTrace//..'),
 # but the traces contain canonical paths, so canonicalize before substituting.
 # Substitute both the logical and the physical form, since the two differ when
@@ -34,9 +45,7 @@ for answer in examples/*.answer; do
   outdir=examples/$name.outdir
 
   if [ ! -d "$outdir" ]; then
-    echo "FAIL $name: $outdir does not exist."
-    echo "     Run 'make test' first, and note that it is a no-op unless HOL"
-    echo "     Light was built with HOLLIGHT_USE_MODULE=1."
+    echo "FAIL $name: $outdir does not exist. Run 'make test' first."
     status=1
     continue
   fi

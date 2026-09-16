@@ -130,8 +130,8 @@ TacticTrace will not catch tactics that are defined inside a module.
 
 `make test` runs the proofs in `examples/` through the full pipeline of steps 1
 and 2 above, writing the collected traces to `examples/<name>.outdir` and the
-HOL Light output to `examples/<name>.hollog`. `make check` additionally compares
-the collected traces against the expected traces in `examples/<name>.answer`:
+HOL Light output to `examples/<name>.hollog`, and then compares the collected
+traces against the expected traces in `examples/<name>.answer`:
 
 ```sh
 export HOLLIGHT_DIR=<the HOL Light dir>
@@ -139,11 +139,11 @@ eval $(opam env --set-switch --switch=${HOLLIGHT_DIR})
 
 make
 ./build-hol-kernel.sh
-make check
+make test
 ```
 
 Note that `make test` is a no-op unless HOL Light was built with
-`HOLLIGHT_USE_MODULE=1`.
+`HOLLIGHT_USE_MODULE=1`, since no traces can be collected without it.
 
 The expected traces record the HOL Light directory as the literal string
 `$HOLLIGHT_DIR` so that they do not depend on where HOL Light is checked out;
