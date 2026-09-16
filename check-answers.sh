@@ -17,9 +17,14 @@ fi
 
 # $HOLLIGHT_DIR may be non-canonical (the Makefile passes '<...>/TacticTrace//..'),
 # but the traces contain canonical paths, so canonicalize before substituting.
+# Substitute both the logical and the physical form, since the two differ when
+# the path to HOL Light goes through a symlink and it is not obvious which one
+# ends up in the traces.
 holdir=$(cd "$HOLLIGHT_DIR" && pwd)
+holdir_physical=$(cd "$HOLLIGHT_DIR" && pwd -P)
 
-tmpdir=$(mktemp -d)
+# A template is given explicitly because BSD mktemp, as on MacOS, requires one.
+tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/tactictrace.XXXXXX")
 trap 'rm -rf "$tmpdir"' EXIT
 
 status=0
@@ -43,7 +48,9 @@ for answer in examples/*.answer; do
       status=1
       continue 2
     fi
-    sed "s|$holdir|\$HOLLIGHT_DIR|g" "$json" > "$tmpdir/$name/$(basename "$json")"
+    sed -e "s|$holdir_physical|\$HOLLIGHT_DIR|g" \
+        -e "s|$holdir|\$HOLLIGHT_DIR|g" \
+        "$json" > "$tmpdir/$name/$(basename "$json")"
   done
 
   if diff -r -u "$answer" "$tmpdir/$name"; then

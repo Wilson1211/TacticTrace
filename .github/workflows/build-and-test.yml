@@ -10,6 +10,10 @@ name: Build and test
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: 'The runner to build on. Linux and MacOS are supported.'
+        type: string
+        default: 'ubuntu-24.04'
       hol-light-repository:
         description: 'The HOL Light repository to build against.'
         type: string
@@ -24,12 +28,13 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-24.04
-    name: OCaml 5.4, camlp5 8.04
-    timeout-minutes: 120
+    runs-on: ${{ inputs.runs-on }}
+    name: ${{ inputs.runs-on }}, OCaml 5.4, camlp5 8.04
+    timeout-minutes: 180
 
     steps:
-      - name: Install opam
+      - name: Install opam (Linux)
+        if: runner.os == 'Linux'
         run: |
           set -xe
           sudo apt-get update
@@ -38,13 +43,23 @@ jobs:
           # 'make switch-5' creates, so do not build a default compiler here.
           opam init -n --bare --disable-sandboxing
 
+      - name: Install opam (MacOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -xe
+          # gmp and pkg-config are what zarith needs to build. Installing them
+          # here rather than letting 'make switch-5' resolve them as opam
+          # depexts keeps the build off the slower path.
+          brew install opam gmp pkg-config
+          opam init -n --bare --disable-sandboxing
+
       # 'make switch-5' builds ocaml-base-compiler.5.4.0 from source. Caching
       # opam's download cache avoids refetching the compiler and camlp5 sources.
       - name: Cache opam downloads
         uses: actions/cache@v5
         with:
           path: ~/.opam/download-cache
-          key: opam-download-${{ runner.os }}-ocaml-5.4.0-camlp5-8.04.00
+          key: opam-download-${{ runner.os }}-${{ runner.arch }}-ocaml-5.4.0-camlp5-8.04.00
 
       - name: Checkout HOL Light
         uses: actions/checkout@v7
@@ -105,7 +120,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: traces-${{ inputs.hol-light-ref }}
+          name: traces-${{ inputs.runs-on }}-${{ inputs.hol-light-ref }}
           path: |
             hol-light/TacticTrace/examples/*.outdir
             hol-light/TacticTrace/examples/*.hollog

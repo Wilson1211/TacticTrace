@@ -35,8 +35,8 @@ git clone https://github.com/hol-light/TacticTrace.git <the HOL Light dir>/Tacti
 ```
 
 **Operating System.**
-TacticTrace is tested on Ubuntu and MacOS. Continuous integration covers Ubuntu
-only.
+TacticTrace is tested on Ubuntu and MacOS, both of which are covered by
+continuous integration.
 
 ## 1. Building trace-generating tactic/conv wrappers of the HOL Light kernel
 
@@ -161,11 +161,11 @@ for d in examples/*.outdir; do
 done
 ```
 
-This is also what GitHub Actions runs; see `.github/workflows/`. The pinned job
-builds against a fixed HOL Light revision (recorded in
-`.github/workflows/ci.yml`) so that a red build always means a change here broke
-something, and a weekly job builds against HOL Light `master` to give early
-warning when upstream drifts away from us.
+This is also what GitHub Actions runs, on Ubuntu and on MacOS; see
+`.github/workflows/`. The pinned jobs build against a fixed HOL Light revision
+(recorded in `.github/workflows/ci.yml`) so that a red build always means a
+change here broke something, and weekly jobs build against HOL Light `master` to
+give early warning when upstream drifts away from us.
 
 ## Versioning and releases
 
