@@ -2,11 +2,11 @@
   {
     "tactic":"CONV_TAC",
     "definition_line_number": {
-       "file_path": "/mnt/disk/hol-light/tactics.ml",
+       "file_path": "$HOLLIGHT_DIR/tactics.ml",
        "line": 349
     },
     "user_line_number": {
-       "file_path": "/mnt/disk/hol-light/TacticTrace/examples/conv.ml",
+       "file_path": "$HOLLIGHT_DIR/TacticTrace/examples/conv.ml",
        "line": 12
     },
     "arg_names": ["conv"],
@@ -20,11 +20,11 @@
   {
     "tactic":"CONV_TAC",
     "definition_line_number": {
-       "file_path": "/mnt/disk/hol-light/tactics.ml",
+       "file_path": "$HOLLIGHT_DIR/tactics.ml",
        "line": 349
     },
     "user_line_number": {
-       "file_path": "/mnt/disk/hol-light/TacticTrace/examples/conv.ml",
+       "file_path": "$HOLLIGHT_DIR/TacticTrace/examples/conv.ml",
        "line": 10
     },
     "arg_names": ["conv"],

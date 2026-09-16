@@ -15,10 +15,28 @@ as `let <theorem> = prove(<goal>, <proof>);;` and dumping in the JSON format.
 
 This project does not need patching HOL Light.
 Instead, HOL Light must be built with OCaml 5.4.0 (the `make switch-5` as of
-Nov. 20, 2025) and compiled with `HOLLIGHT_USE_MODULE=1`.
+Nov. 20, 2025) and compiled with `HOLLIGHT_USE_MODULE=1`:
+
+```sh
+git clone https://github.com/jrh13/hol-light.git
+cd hol-light
+make switch-5
+eval $(opam env)
+HOLLIGHT_USE_MODULE=1 make
+```
+
+**Location.**
+TacticTrace's scripts locate each other, `hol_lib_inlined.mli` and
+`kernel_wrapper.ml` through `$HOLLIGHT_DIR/TacticTrace`, so this repository has
+to be checked out inside the HOL Light directory:
+
+```sh
+git clone https://github.com/hol-light/TacticTrace.git <the HOL Light dir>/TacticTrace
+```
 
 **Operating System.**
-TacticTrace is tested on Ubuntu and MacOS.
+TacticTrace is tested on Ubuntu and MacOS. Continuous integration covers Ubuntu
+only.
 
 ## 1. Building trace-generating tactic/conv wrappers of the HOL Light kernel
 
@@ -107,6 +125,76 @@ Therefore, if you want to extract the string representation of goal from the sou
 
 **Theorems inside modules.**
 TacticTrace will not catch tactics that are defined inside a module.
+
+## Testing
+
+`make test` runs the proofs in `examples/` through the full pipeline of steps 1
+and 2 above, writing the collected traces to `examples/<name>.outdir` and the
+HOL Light output to `examples/<name>.hollog`. `make check` additionally compares
+the collected traces against the expected traces in `examples/<name>.answer`:
+
+```sh
+export HOLLIGHT_DIR=<the HOL Light dir>
+eval $(opam env --set-switch --switch=${HOLLIGHT_DIR})
+
+make
+./build-hol-kernel.sh
+make check
+```
+
+Note that `make test` is a no-op unless HOL Light was built with
+`HOLLIGHT_USE_MODULE=1`.
+
+The expected traces record the HOL Light directory as the literal string
+`$HOLLIGHT_DIR` so that they do not depend on where HOL Light is checked out;
+`check-answers.sh` substitutes the real path before comparing. To accept an
+intended change in the trace format, regenerate the answers with:
+
+```sh
+make test
+for d in examples/*.outdir; do
+  a=${d%.outdir}.answer
+  rm -rf $a && mkdir -p $a
+  for f in $d/*.json; do
+    sed "s|$(cd $HOLLIGHT_DIR && pwd)|\$HOLLIGHT_DIR|g" $f > $a/$(basename $f)
+  done
+done
+```
+
+This is also what GitHub Actions runs; see `.github/workflows/`. The pinned job
+builds against a fixed HOL Light revision (recorded in
+`.github/workflows/ci.yml`) so that a red build always means a change here broke
+something, and a weekly job builds against HOL Light `master` to give early
+warning when upstream drifts away from us.
+
+## Versioning and releases
+
+Releases are tagged `ocaml-<version>/v<n>`, where `<version>` is the OCaml
+version that HOL Light must be built with and `<n>` counts the releases made
+against it:
+
+```
+ocaml-5.4/v1
+ocaml-5.4/v2
+ocaml-5.4/v3
+  |
+ocaml-5.5/v1
+```
+
+TacticTrace tracks OCaml and HOL Light internals closely enough that the
+supported compiler is the most important thing a user needs to know about a
+release, so it is named in the tag rather than left to a changelog. Updates for
+the currently supported compiler bump `<n>`; when HOL Light supports a new OCaml
+version well, that becomes a new `ocaml-<version>/v1`. The two series can be
+maintained in parallel from `release/ocaml-5.4`-style branches if a fix is
+needed for an older compiler after `main` has moved on.
+
+## History
+
+TacticTrace was developed inside the HOL Light repository, as its `TacticTrace`
+directory, from September 2025 until it moved to this repository. HOL Light's
+`holtest.mk` used to test it through the `TacticTrace/make-test` target; that is
+now covered by this repository's GitHub Actions workflows.
 
 ## Author and contact
 

@@ -1,0 +1,112 @@
+name: Build and test
+
+# Builds HOL Light with OCaml 5.4 and HOLLIGHT_USE_MODULE=1, builds TacticTrace
+# against it, collects the traces of the examples and compares them against the
+# expected traces checked into examples/*.answer .
+#
+# This reproduces what the TacticTrace/make-test target of HOL Light's
+# holtest.mk used to do, and additionally asserts on the collected traces.
+
+on:
+  workflow_call:
+    inputs:
+      hol-light-repository:
+        description: 'The HOL Light repository to build against.'
+        type: string
+        default: 'jrh13/hol-light'
+      hol-light-ref:
+        description: 'The HOL Light branch, tag or commit to build against.'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    name: OCaml 5.4, camlp5 8.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Install opam
+        run: |
+          set -xe
+          sudo apt-get update
+          sudo apt-get install -y opam
+          # --bare: the switch that matters is the local one that HOL Light's
+          # 'make switch-5' creates, so do not build a default compiler here.
+          opam init -n --bare --disable-sandboxing
+
+      # 'make switch-5' builds ocaml-base-compiler.5.4.0 from source. Caching
+      # opam's download cache avoids refetching the compiler and camlp5 sources.
+      - name: Cache opam downloads
+        uses: actions/cache@v5
+        with:
+          path: ~/.opam/download-cache
+          key: opam-download-${{ runner.os }}-ocaml-5.4.0-camlp5-8.04.00
+
+      - name: Checkout HOL Light
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ inputs.hol-light-repository }}
+          ref: ${{ inputs.hol-light-ref }}
+          path: hol-light
+
+      # TacticTrace's scripts find each other, hol_lib_inlined.mli and
+      # kernel_wrapper.ml through $HOLLIGHT_DIR/TacticTrace, so this repository
+      # has to be checked out inside the HOL Light directory. HOL Light
+      # revisions up to and including efebbdc bundle their own copy of
+      # TacticTrace there; remove it so that ours is the one under test.
+      - name: Remove the TacticTrace copy bundled with HOL Light, if any
+        run: rm -rf hol-light/TacticTrace
+
+      - name: Checkout TacticTrace into hol-light/TacticTrace
+        uses: actions/checkout@v7
+        with:
+          path: hol-light/TacticTrace
+
+      - name: Build HOL Light (OCaml 5.4, HOLLIGHT_USE_MODULE=1)
+        working-directory: hol-light
+        run: |
+          set -xe
+          make switch-5
+          eval $(opam env)
+          ocaml --version
+          export HOLLIGHT_USE_MODULE=1
+          make
+          # TacticTrace needs both of these; fail early and clearly if the
+          # build did not produce them.
+          test "$(./hol.sh -use-module)" = 1
+          test -f hol_lib_inlined.ml
+
+      - name: Build TacticTrace
+        working-directory: hol-light
+        run: |
+          set -xe
+          make clean -C TacticTrace
+          make -C TacticTrace
+
+      - name: Build the trace-generating HOL Light kernel wrappers
+        working-directory: hol-light
+        run: |
+          set -xe
+          export HOLLIGHT_DIR=$(./hol.sh -dir)
+          cd TacticTrace
+          ./build-hol-kernel.sh
+
+      - name: Collect the traces and compare them against the expected answers
+        working-directory: hol-light
+        run: |
+          set -xe
+          make check -C TacticTrace
+
+      - name: Upload the collected traces and HOL Light logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traces-${{ inputs.hol-light-ref }}
+          path: |
+            hol-light/TacticTrace/examples/*.outdir
+            hol-light/TacticTrace/examples/*.hollog
+          if-no-files-found: ignore

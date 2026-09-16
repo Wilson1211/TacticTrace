@@ -2,11 +2,11 @@
   {
     "conv":"simple_conv3",
     "definition_line_number": {
-       "file_path": "/mnt/disk/hol-light/TacticTrace/examples/conv.ml",
+       "file_path": "$HOLLIGHT_DIR/TacticTrace/examples/conv.ml",
        "line": 5
     },
     "user_line_number": {
-       "file_path": "/mnt/disk/hol-light/TacticTrace/examples/conv.ml",
+       "file_path": "$HOLLIGHT_DIR/TacticTrace/examples/conv.ml",
        "line": 11
     },
     "arg_names": ["(unknown)"],

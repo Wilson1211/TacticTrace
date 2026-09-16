@@ -2,11 +2,11 @@
   {
     "tactic":"tac_arg",
     "definition_line_number": {
-       "file_path": "/mnt/disk/hol-light/TacticTrace/examples/tactic.ml",
+       "file_path": "$HOLLIGHT_DIR/TacticTrace/examples/tactic.ml",
        "line": 4
     },
     "user_line_number": {
-       "file_path": "/mnt/disk/hol-light/TacticTrace/examples/tactic.ml",
+       "file_path": "$HOLLIGHT_DIR/TacticTrace/examples/tactic.ml",
        "line": 10
     },
     "arg_names": ["t"],

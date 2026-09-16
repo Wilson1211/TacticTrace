@@ -13,3 +13,9 @@ types_lexer.ml
 types_parser.ml
 types_parser.mli
 types_test
+examples/*.outdir
+examples/*_inlined*
+examples/*.hollog
+examples/*.native
+examples/*.cm*
+examples/*.o

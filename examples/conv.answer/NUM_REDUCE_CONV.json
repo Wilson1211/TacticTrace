@@ -2,11 +2,11 @@
   {
     "conv":"NUM_REDUCE_CONV",
     "definition_line_number": {
-       "file_path": "/mnt/disk/hol-light/calc_num.ml",
+       "file_path": "$HOLLIGHT_DIR/calc_num.ml",
        "line": 1478
     },
     "user_line_number": {
-       "file_path": "/mnt/disk/hol-light/TacticTrace/examples/conv.ml",
+       "file_path": "$HOLLIGHT_DIR/TacticTrace/examples/conv.ml",
        "line": 5
     },
     "arg_names": ["(unknown)"],
@@ -18,11 +18,11 @@
   {
     "conv":"NUM_REDUCE_CONV",
     "definition_line_number": {
-       "file_path": "/mnt/disk/hol-light/calc_num.ml",
+       "file_path": "$HOLLIGHT_DIR/calc_num.ml",
        "line": 1478
     },
     "user_line_number": {
-       "file_path": "/mnt/disk/hol-light/TacticTrace/examples/conv.ml",
+       "file_path": "$HOLLIGHT_DIR/TacticTrace/examples/conv.ml",
        "line": 1
     },
     "arg_names": ["(unknown)"],
@@ -34,11 +34,11 @@
   {
     "conv":"NUM_REDUCE_CONV",
     "definition_line_number": {
-       "file_path": "/mnt/disk/hol-light/calc_num.ml",
+       "file_path": "$HOLLIGHT_DIR/calc_num.ml",
        "line": 1478
     },
     "user_line_number": {
-       "file_path": "/mnt/disk/hol-light/TacticTrace/examples/conv.ml",
+       "file_path": "$HOLLIGHT_DIR/TacticTrace/examples/conv.ml",
        "line": 7
     },
     "arg_names": ["(unknown)"],
