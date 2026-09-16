@@ -15,15 +15,13 @@ if [ ! -d "$HOLLIGHT_DIR" ]; then
   exit 1
 fi
 
-# Collecting traces at all needs HOL Light built with HOLLIGHT_USE_MODULE=1, so
-# 'make test' skips the examples without it. Skip the comparison in that case
-# too, rather than failing over traces that were never meant to be produced.
-# (The CI workflow asserts on HOLLIGHT_USE_MODULE separately, so this cannot
-# quietly turn the whole test into a no-op there.)
+# Collecting traces at all needs HOL Light built with HOLLIGHT_USE_MODULE=1.
+# Without it there is nothing to compare, which is a failure rather than a pass.
 if [ "$("$HOLLIGHT_DIR"/hol.sh -use-module)" != "1" ]; then
-  echo "SKIP: HOL Light at $HOLLIGHT_DIR was not built with HOLLIGHT_USE_MODULE=1,"
-  echo "      so no traces were collected and there is nothing to compare."
-  exit 0
+  echo "Error: HOL Light at $HOLLIGHT_DIR was not built with HOLLIGHT_USE_MODULE=1,"
+  echo "       so no traces can be collected. Rebuild it with"
+  echo "         HOLLIGHT_USE_MODULE=1 make"
+  exit 1
 fi
 
 # $HOLLIGHT_DIR may be non-canonical (the Makefile passes '<...>/TacticTrace//..'),

@@ -142,8 +142,8 @@ make
 make test
 ```
 
-Note that `make test` is a no-op unless HOL Light was built with
-`HOLLIGHT_USE_MODULE=1`, since no traces can be collected without it.
+`make test` fails if HOL Light was not built with `HOLLIGHT_USE_MODULE=1`, since
+no traces can be collected without it.
 
 The expected traces record the HOL Light directory as the literal string
 `$HOLLIGHT_DIR` so that they do not depend on where HOL Light is checked out;

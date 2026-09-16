@@ -57,7 +57,12 @@ test: $(TEST_OUTPUTS)
 	HOLLIGHT_DIR=$(HOLLIGHT_DIR) ./check-answers.sh
 
 examples/%.outdir: examples/%.ml tracer
-	if [ `$(HOLLIGHT_DIR)/hol.sh -use-module` -eq 0 ]; then echo "HOLLIGHT_USE_MODULE unset"; exit 0; fi
+	@if [ "$$($(HOLLIGHT_DIR)/hol.sh -use-module)" != "1" ]; then \
+	  echo "Error: HOL Light at $(HOLLIGHT_DIR) was not built with HOLLIGHT_USE_MODULE=1,"; \
+	  echo "       so no traces can be collected. Rebuild it with"; \
+	  echo "         HOLLIGHT_USE_MODULE=1 make"; \
+	  exit 1; \
+	fi
 	$(HOLLIGHT_DIR)/hol.sh inline-load $< $(basename $<)_inlined.ml
 	HOLLIGHT_DIR=$(HOLLIGHT_DIR) $(HOLLIGHT_DIR)/TacticTrace/modify-proof.sh $(basename $<)_inlined.ml $(basename $<)_inlined_wrapped.ml $(basename $<).outdir
 	$(HOLLIGHT_DIR)/hol.sh compile $(basename $<)_inlined_wrapped.ml -o $(basename $<).cmx
