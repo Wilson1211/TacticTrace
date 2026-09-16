@@ -16,10 +16,6 @@ on:
     tags:
       - 'ocaml-*/v*'
 
-  # Every Monday at 06:00 UTC, to notice HOL Light master drifting away from us.
-  schedule:
-    - cron: '0 6 * * 1'
-
 permissions:
   contents: read
 
@@ -27,6 +23,9 @@ jobs:
   # The blocking checks. HOL Light is pinned so that a red build always means a
   # change in this repository broke something, rather than upstream moving.
   # TacticTrace supports Ubuntu and MacOS, so both are checked.
+  #
+  # HOL Light master is checked separately, by upstream.yml, so that it does not
+  # appear among the checks on a push or pull request.
   #
   # The pinned revision is repeated in both jobs below and has to be bumped in
   # both: a reusable workflow's 'with:' cannot read the 'env' context, so there
@@ -47,22 +46,3 @@ jobs:
       # faster, so pinning one only creates maintenance.
       runs-on: 'macos-latest'
       hol-light-ref: 'efebbdc3e11792098db9b99b16b75bcdbad8dfeb'
-
-  # Early warning only. HOL Light master moves independently of this repository,
-  # and TacticTrace depends on HOL Light internals, so these are checked on a
-  # schedule and on demand instead of blocking every pull request.
-  master-linux:
-    name: hol-light (master), Linux
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/build-and-test.yml
-    with:
-      runs-on: 'ubuntu-24.04'
-      hol-light-ref: 'master'
-
-  master-macos:
-    name: hol-light (master), MacOS
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/build-and-test.yml
-    with:
-      runs-on: 'macos-latest'
-      hol-light-ref: 'master'

@@ -26,6 +26,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # opam otherwise asks before letting the system package manager install
+  # depexts, and a prompt in CI is answered 'n' and fails the build.
+  OPAMCONFIRMLEVEL: unsafe-yes
+
 jobs:
   build-and-test:
     runs-on: ${{ inputs.runs-on }}
@@ -38,9 +43,7 @@ jobs:
         run: |
           set -xe
           sudo apt-get update
-          sudo apt-get install -y opam
-          # --bare: the switch that matters is the local one that HOL Light's
-          # 'make switch-5' creates, so do not build a default compiler here.
+          sudo apt-get install -y opam xdot
           opam init -n --bare --disable-sandboxing
 
       - name: Install opam (MacOS)
@@ -99,6 +102,7 @@ jobs:
         working-directory: hol-light
         run: |
           set -xe
+          eval $(opam env --switch "$PWD" --set-switch)
           make clean -C TacticTrace
           make -C TacticTrace
 
@@ -114,11 +118,12 @@ jobs:
         working-directory: hol-light
         run: |
           set -xe
+          eval $(opam env --switch "$PWD" --set-switch)
           make test -C TacticTrace
 
       - name: Upload the collected traces and HOL Light logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: traces-${{ inputs.runs-on }}-${{ inputs.hol-light-ref }}
           path: |

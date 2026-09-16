@@ -14,8 +14,11 @@ HOLLIGHT_DIR?=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))/..
 # directory to PATH so that ocamlfind, ocamlc, etc. are picked up even when
 # this Makefile is invoked from an environment that has not run
 # `eval $(opam env)`.
-ifneq ($(wildcard $(HOLLIGHT_DIR)/_opam/bin),)
-  export PATH := $(abspath $(HOLLIGHT_DIR)/_opam/bin):$(PATH)
+# $(HOLLIGHT_DIR) normally ends in '/..', so normalize it before testing for the
+# directory: the unnormalized form is not matched by $(wildcard) on every make.
+OPAM_BIN := $(abspath $(HOLLIGHT_DIR)/_opam/bin)
+ifneq ($(wildcard $(OPAM_BIN)),)
+  export PATH := $(OPAM_BIN):$(PATH)
 endif
 
 TESTS =\
