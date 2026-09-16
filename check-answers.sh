@@ -8,9 +8,31 @@
 # the HOL Light directory as the literal string $HOLLIGHT_DIR, so that they do
 # not depend on where HOL Light happens to be checked out; this script performs
 # the substitution on the generated traces before comparing.
+#
+# With --update, the collected traces are normalized the same way but written
+# over examples/<name>.answer instead of compared against it, to accept an
+# intended change in the trace format. Review the resulting diff before
+# committing it.
+
+update=0
+case "${1:-}" in
+  --update|-u) update=1 ;;
+  '') ;;
+  *)
+    echo "usage: check-answers.sh [--update]" >&2
+    exit 2
+    ;;
+esac
+
+# The Makefile passes $HOLLIGHT_DIR in, but this script is also run by hand. Fall
+# back to the same default the Makefile uses: this script lives in
+# $HOLLIGHT_DIR/TacticTrace .
+if [ -z "${HOLLIGHT_DIR:-}" ]; then
+  HOLLIGHT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+fi
 
 if [ ! -d "$HOLLIGHT_DIR" ]; then
-  echo "HOLLIGHT_DIR is not set: $HOLLIGHT_DIR"
+  echo "HOLLIGHT_DIR is not a directory: $HOLLIGHT_DIR"
   echo "Please do 'export HOLLIGHT_DIR=<the path to your hol-light>'"
   exit 1
 fi
@@ -48,7 +70,16 @@ for answer in examples/*.answer; do
     continue
   fi
 
-  mkdir -p "$tmpdir/$name"
+  # Normalize into the answer directory itself when updating, so that both modes
+  # go through exactly one copy of the substitution.
+  if [ $update -eq 1 ]; then
+    dest=$answer
+    rm -rf "$dest"
+  else
+    dest=$tmpdir/$name
+  fi
+  mkdir -p "$dest"
+
   for json in "$outdir"/*.json; do
     if [ ! -e "$json" ]; then
       echo "FAIL $name: $outdir contains no .json trace"
@@ -57,10 +88,12 @@ for answer in examples/*.answer; do
     fi
     sed -e "s|$holdir_physical|\$HOLLIGHT_DIR|g" \
         -e "s|$holdir|\$HOLLIGHT_DIR|g" \
-        "$json" > "$tmpdir/$name/$(basename "$json")"
+        "$json" > "$dest/$(basename "$json")"
   done
 
-  if diff -r -u "$answer" "$tmpdir/$name"; then
+  if [ $update -eq 1 ]; then
+    echo "UPDATED $answer"
+  elif diff -r -u "$answer" "$dest"; then
     echo "PASS $name"
   else
     echo "FAIL $name: the generated traces differ from $answer"
@@ -68,7 +101,11 @@ for answer in examples/*.answer; do
   fi
 done
 
-if [ $status -eq 0 ]; then
+if [ $status -ne 0 ]; then
+  :
+elif [ $update -eq 1 ]; then
+  echo "Expected traces updated. Review the diff before committing it."
+else
   echo "All traces match the expected answers."
 fi
 

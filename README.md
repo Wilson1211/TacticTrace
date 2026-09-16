@@ -15,7 +15,7 @@ as `let <theorem> = prove(<goal>, <proof>);;` and dumping in the JSON format.
 
 This project does not need patching HOL Light.
 Instead, HOL Light must be built with OCaml 5.4.0 (the `make switch-5` as of
-Nov. 20, 2025) and compiled with `HOLLIGHT_USE_MODULE=1`:
+Sep. 16, 2026) and compiled with `HOLLIGHT_USE_MODULE=1`:
 
 ```sh
 git clone https://github.com/jrh13/hol-light.git
@@ -147,19 +147,20 @@ no traces can be collected without it.
 
 The expected traces record the HOL Light directory as the literal string
 `$HOLLIGHT_DIR` so that they do not depend on where HOL Light is checked out;
-`check-answers.sh` substitutes the real path before comparing. To accept an
-intended change in the trace format, regenerate the answers with:
+`check-answers.sh` substitutes the real path before comparing.
+
+If you change the trace format, `make test` will report the difference and fail.
+To accept the new traces as expected, run:
 
 ```sh
+./check-answers.sh --update
 make test
-for d in examples/*.outdir; do
-  a=${d%.outdir}.answer
-  rm -rf $a && mkdir -p $a
-  for f in $d/*.json; do
-    sed "s|$(cd $HOLLIGHT_DIR && pwd)|\$HOLLIGHT_DIR|g" $f > $a/$(basename $f)
-  done
-done
 ```
+
+`--update` writes the traces that the failing `make test` already collected in
+`examples/<name>.outdir` over `examples/<name>.answer`, normalizing them the same
+way the comparison does. Review the resulting diff before committing it, and run
+`make test` again to confirm it now passes.
 
 This is also what GitHub Actions runs, on Ubuntu and on MacOS; see
 `.github/workflows/`. The pinned jobs build against a fixed HOL Light revision
