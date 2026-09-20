@@ -26,6 +26,7 @@ TESTS =\
   examples/conv.ml
 
 TEST_OUTPUTS = $(TESTS:.ml=.outdir)
+LAZY_TACTIC_ARGS_TEST = tests/lazy_tactic_args.native
 
 
 all: types_test tracer
@@ -56,8 +57,23 @@ ocamlTypes.cmo: ocamlTypes.ml
 
 # Collect the traces of the examples, then compare them against the expected
 # traces in examples/*.answer .
-test: $(TEST_OUTPUTS)
+test: $(TEST_OUTPUTS) test-lazy-tactic-args
 	HOLLIGHT_DIR=$(HOLLIGHT_DIR) ./check-answers.sh
+
+test-lazy-tactic-args: $(LAZY_TACTIC_ARGS_TEST)
+	./$(LAZY_TACTIC_ARGS_TEST) > tests/lazy_tactic_args.hollog
+
+tests/lazy_tactic_args_wrapped.ml: exportTrace.ml tests/lazy_tactic_args.ml
+	{ \
+	  echo 'open Hol_lib;;'; \
+	  echo 'open Hol_loader;;'; \
+	  cat exportTrace.ml; \
+	  cat tests/lazy_tactic_args.ml; \
+	} > $@
+
+$(LAZY_TACTIC_ARGS_TEST): tests/lazy_tactic_args_wrapped.ml
+	$(HOLLIGHT_DIR)/hol.sh compile $< -o tests/lazy_tactic_args.cmx
+	$(HOLLIGHT_DIR)/hol.sh link tests/lazy_tactic_args.cmx -o $@
 
 examples/%.outdir: examples/%.ml tracer
 	@if [ "$$($(HOLLIGHT_DIR)/hol.sh -use-module)" != "1" ]; then \
@@ -76,5 +92,6 @@ examples/%.outdir: examples/%.ml tracer
 clean:
 	rm -f *.cmo *.cmi tracer types_test types_parser.ml types_parser.mli types_lexer.ml kernel_wrapper.ml
 	rm -rf $(TEST_OUTPUTS) examples/*.cm* examples/*_inlined* examples/*.o examples/*.hollog examples/*.native
+	rm -f tests/lazy_tactic_args_wrapped.ml tests/lazy_tactic_args.cm* tests/lazy_tactic_args.o tests/lazy_tactic_args.hollog $(LAZY_TACTIC_ARGS_TEST)
 
-.PHONY: all clean test
+.PHONY: all clean test test-lazy-tactic-args

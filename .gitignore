@@ -19,3 +19,8 @@ examples/*.hollog
 examples/*.native
 examples/*.cm*
 examples/*.o
+tests/*_wrapped.ml
+tests/*.cm*
+tests/*.hollog
+tests/*.native
+tests/*.o
