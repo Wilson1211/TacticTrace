@@ -40,9 +40,11 @@ let make_record n = make_record_from_term n (nested_conj n);;
 let retained_labels =
   List.init test_max_num_records (fun i -> "retained-" ^ string_of_int i);;
 
+let retained_record = make_record 50;;
+
 List.iteri
-  (fun i label ->
-    exptrace_add_tac test_tactic_name (make_record (50 + i)) (make_args label))
+  (fun _ label ->
+    exptrace_add_tac test_tactic_name retained_record (make_args label))
   retained_labels;;
 
 (* Adding records must not render arguments, even for records being retained. *)
