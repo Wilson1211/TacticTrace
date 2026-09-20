@@ -142,6 +142,11 @@ make
 make test
 ```
 
+It also runs a focused regression test for lazy tactic argument rendering. The
+test checks that arguments are not rendered while records are added, retained
+arguments are rendered once during the dump, and a discarded candidate is
+never rendered.
+
 `make test` fails if HOL Light was not built with `HOLLIGHT_USE_MODULE=1`, since
 no traces can be collected without it.
 
