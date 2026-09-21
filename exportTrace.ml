@@ -107,6 +107,8 @@ module ExportTrace = struct
     :(string,
         (tac_record * record_args Lazy.t * tac_record_interestingness) list)
       Hashtbl.t =
+    (* Tactic arguments stay lazy while records compete for retention.
+       Conversion records remain eager below. *)
     Hashtbl.create 128
   let conv_logs
     :(string,
@@ -129,6 +131,7 @@ let exptrace_add_tac (tactic_name:string)
   (* Lazily calculate interestingness of this tac_record 're'. *)
   let mk_i () = ExportTrace.mk_tac_record_interestingness re in
 
+  (* Do not call re_arg_gen here: the retention logic may discard this record. *)
   let mk_full_rec() = (re, lazy (re_arg_gen()), mk_i()) in
 
   match Hashtbl.find_opt logs tactic_name with
@@ -197,6 +200,7 @@ let exptrace_dump (dir_path:string): unit =
 
       Printf.fprintf oc "[\n";
       List.iteri (fun i ((r:ExportTrace.tac_record),r_args_lazy,_) ->
+          (* Render arguments only after this record has survived retention. *)
           let r_args:ExportTrace.record_args = Lazy.force r_args_lazy in
           Printf.fprintf oc "  {\n";
           Printf.fprintf oc "    \"tactic\":\"%s\",\n" tac;
