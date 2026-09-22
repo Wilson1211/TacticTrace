@@ -60,9 +60,12 @@ ocamlTypes.cmo: ocamlTypes.ml
 test: $(TEST_OUTPUTS) test-lazy-tactic-args
 	HOLLIGHT_DIR=$(HOLLIGHT_DIR) ./check-answers.sh
 
+# This fixture calls the trace API directly, so it can observe exactly when an
+# argument generator runs without going through the AST instrumentation.
 test-lazy-tactic-args: $(LAZY_TACTIC_ARGS_TEST)
 	./$(LAZY_TACTIC_ARGS_TEST) > tests/lazy_tactic_args.hollog
 
+# Build one HOL Light program containing both the trace code and the fixture.
 tests/lazy_tactic_args_wrapped.ml: exportTrace.ml tests/lazy_tactic_args.ml
 	{ \
 	  echo 'open Hol_lib;;'; \

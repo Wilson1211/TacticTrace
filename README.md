@@ -145,7 +145,8 @@ make test
 It also runs a focused regression test for lazy tactic argument rendering. The
 test checks that arguments are not rendered while records are added, retained
 arguments are rendered once during the dump, and a discarded candidate is
-never rendered.
+never rendered. It covers tactic records only; conversion argument rendering
+remains eager and is covered by the existing conversion answer tests.
 
 `make test` fails if HOL Light was not built with `HOLLIGHT_USE_MODULE=1`, since
 no traces can be collected without it.

@@ -5,6 +5,7 @@ open ExportTrace;;
 
 let test_tactic_name = "__lazy_tactic_args_test__";;
 
+(* This list makes argument rendering observable without doing expensive work. *)
 let forced_args = ref [];;
 
 let make_args label () =
@@ -40,6 +41,7 @@ let make_record n = make_record_from_term n (nested_conj n);;
 let retained_labels =
   List.init test_max_num_records (fun i -> "retained-" ^ string_of_int i);;
 
+(* Reuse one fixed goal so the fixture stays small if the record limit grows. *)
 let retained_record = make_record 50;;
 
 List.iteri

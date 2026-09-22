@@ -19,6 +19,7 @@ examples/*.hollog
 examples/*.native
 examples/*.cm*
 examples/*.o
+# Files created when the focused lazy-argument test is compiled and run.
 tests/*_wrapped.ml
 tests/*.cm*
 tests/*.hollog
