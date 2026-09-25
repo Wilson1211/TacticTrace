@@ -17,7 +17,7 @@ module ExportTrace = struct
     output: thm
   }
 
-  (* Separate record_args to lazily evaluate this (otherwise it takes too long) *)
+  (* Keep record_args separate so tactic records can render them lazily. *)
   type record_args = {
     names: string list;
     types: string list;
@@ -65,7 +65,7 @@ module ExportTrace = struct
     }
 
   let all_tac_records_interesting
-      (tr: (tac_record * record_args * tac_record_interestingness) list): bool =
+      (tr: (tac_record * record_args Lazy.t * tac_record_interestingness) list): bool =
     let interesting_concl_strlen = 100 in
     List.for_all (fun (_,_,i) -> i.input_concl_str_len < interesting_concl_strlen)
       tr
@@ -105,8 +105,10 @@ module ExportTrace = struct
 
   let tac_logs
     :(string,
-        (tac_record * record_args * tac_record_interestingness) list)
+        (tac_record * record_args Lazy.t * tac_record_interestingness) list)
       Hashtbl.t =
+    (* Tactic arguments stay lazy while records compete for retention.
+       Conversion records remain eager below. *)
     Hashtbl.create 128
   let conv_logs
     :(string,
@@ -129,7 +131,8 @@ let exptrace_add_tac (tactic_name:string)
   (* Lazily calculate interestingness of this tac_record 're'. *)
   let mk_i () = ExportTrace.mk_tac_record_interestingness re in
 
-  let mk_full_rec() = (re, re_arg_gen(), mk_i()) in
+  (* Do not call re_arg_gen here: the retention logic may discard this record. *)
+  let mk_full_rec() = (re, lazy (re_arg_gen()), mk_i()) in
 
   match Hashtbl.find_opt logs tactic_name with
   | None ->
@@ -196,7 +199,9 @@ let exptrace_dump (dir_path:string): unit =
       let oc = open_out path in
 
       Printf.fprintf oc "[\n";
-      List.iteri (fun i ((r:ExportTrace.tac_record),(r_args:ExportTrace.record_args),_) ->
+      List.iteri (fun i ((r:ExportTrace.tac_record),r_args_lazy,_) ->
+          (* Render arguments only after this record has survived retention. *)
+          let r_args:ExportTrace.record_args = Lazy.force r_args_lazy in
           Printf.fprintf oc "  {\n";
           Printf.fprintf oc "    \"tactic\":\"%s\",\n" tac;
           Printf.fprintf oc "    \"definition_line_number\": {\n";
