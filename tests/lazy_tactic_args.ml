@@ -1,5 +1,8 @@
 (* Verify that tactic argument rendering is deferred until trace dumping. *)
 
+(* Load the collector so inline-load can preserve its source locations. *)
+needs "exportTrace.ml";;
+
 unset_jrh_lexer;;
 open ExportTrace;;
 

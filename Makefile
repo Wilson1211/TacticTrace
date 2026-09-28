@@ -65,14 +65,9 @@ test: $(TEST_OUTPUTS) test-lazy-tactic-args
 test-lazy-tactic-args: $(LAZY_TACTIC_ARGS_TEST)
 	./$(LAZY_TACTIC_ARGS_TEST) > tests/lazy_tactic_args.hollog
 
-# Build one HOL Light program containing both the trace code and the fixture.
-tests/lazy_tactic_args_wrapped.ml: exportTrace.ml tests/lazy_tactic_args.ml
-	{ \
-	  echo 'open Hol_lib;;'; \
-	  echo 'open Hol_loader;;'; \
-	  cat exportTrace.ml; \
-	  cat tests/lazy_tactic_args.ml; \
-	} > $@
+# Inline the collector and fixture while keeping original file names and lines.
+tests/lazy_tactic_args_wrapped.ml: tests/lazy_tactic_args.ml exportTrace.ml
+	$(HOLLIGHT_DIR)/hol.sh inline-load $< $@
 
 $(LAZY_TACTIC_ARGS_TEST): tests/lazy_tactic_args_wrapped.ml
 	$(HOLLIGHT_DIR)/hol.sh compile $< -o tests/lazy_tactic_args.cmx
