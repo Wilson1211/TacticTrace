@@ -19,3 +19,5 @@ examples/*.hollog
 examples/*.native
 examples/*.cm*
 examples/*.o
+tests/_trace_sampling/
+tests/__pycache__/

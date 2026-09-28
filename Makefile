@@ -56,8 +56,15 @@ ocamlTypes.cmo: ocamlTypes.ml
 
 # Collect the traces of the examples, then compare them against the expected
 # traces in examples/*.answer .
-test: $(TEST_OUTPUTS)
+test: $(TEST_OUTPUTS) test-trace-sampling
 	HOLLIGHT_DIR=$(HOLLIGHT_DIR) ./check-answers.sh
+
+# Compile the exporter from this checkout, even when HOL Light lives elsewhere.
+test-trace-sampling: tests/_trace_sampling/trace_sampling.native
+	python3 tests/test_trace_sampling.py
+
+tests/_trace_sampling/trace_sampling.native: exportTrace.ml tests/trace_sampling.ml tests/build_trace_sampling.py
+	python3 tests/build_trace_sampling.py "$(HOLLIGHT_DIR)"
 
 examples/%.outdir: examples/%.ml tracer
 	@if [ "$$($(HOLLIGHT_DIR)/hol.sh -use-module)" != "1" ]; then \
@@ -77,4 +84,4 @@ clean:
 	rm -f *.cmo *.cmi tracer types_test types_parser.ml types_parser.mli types_lexer.ml kernel_wrapper.ml
 	rm -rf $(TEST_OUTPUTS) examples/*.cm* examples/*_inlined* examples/*.o examples/*.hollog examples/*.native
 
-.PHONY: all clean test
+.PHONY: all clean test test-trace-sampling
