@@ -77,6 +77,19 @@ ${HOLLIGHT_DIR}/hol.sh compile a_inlined_wrapped.ml -o a_inlined_wrapped.cmx
 ${HOLLIGHT_DIR}/hol.sh link a_inlined_wrapped.cmx -o a_inlined_wrapped.native
 ```
 
+### Optional tactic retention policies
+
+The default `legacy` policy keeps the existing retention behavior. Newly rebuilt
+proofs can also select `stratified-reservoir` at runtime, using separate reservoirs
+for applications that produce 0, 1, or 2+ subgoals. Conversions and size filters
+are unchanged.
+
+Set `TRACE_SAMPLING_POLICY`, `TRACE_SAMPLING_SEED`, and an explicit
+`TRACE_SAMPLING_OUTPUT_ROOT` to compare policies without mixing trace outputs.
+Existing proof executables do not automatically support these settings. See
+[the sampling guide](docs/trace-sampling.md) for direct environment-variable
+examples, metadata, reproducibility, and rebuild limits.
+
 ## 3. Collecting top-level theorems
 
 Given an inlined HOL Light proof `a_inlined.ml`, you can use `tracer collect-top-level-thms` to
