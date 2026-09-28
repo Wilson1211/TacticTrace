@@ -62,6 +62,7 @@ test: $(TEST_OUTPUTS) test-trace-sampling
 # Compile the exporter from this checkout, even when HOL Light lives elsewhere.
 test-trace-sampling: tests/_trace_sampling/trace_sampling.native
 	python3 tests/test_trace_sampling.py
+	python3 tests/test_sampling_runner.py
 
 tests/_trace_sampling/trace_sampling.native: exportTrace.ml tests/trace_sampling.ml tests/build_trace_sampling.py
 	python3 tests/build_trace_sampling.py "$(HOLLIGHT_DIR)"
