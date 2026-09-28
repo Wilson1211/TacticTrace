@@ -33,10 +33,11 @@ Regenerate the instrumented source with this collector, then compile and link
 it in a separate build directory. A kernel-wrapper rebuild alone is not enough.
 Do not delete old `.native`, `.correct`, or trace files to force a rebuild.
 
-Changing an environment variable does not rebuild a proof, bypass a `.correct`
-make target, or retrofit an old executable. An old executable may ignore these
-variables and use its original dump path. Verify the build's provenance before
-running it.
+The wrapper below does **not** rebuild a proof, bypass a `.correct` make target,
+or retrofit an old executable. An old executable may ignore these variables
+and use its original dump path. Verify the build's provenance before running it.
+The wrapper's final metadata check detects a missing collector after the command
+finishes; it is not a preflight guarantee about an arbitrary executable.
 
 The original build scripts expect the deployed collector under
 `$HOLLIGHT_DIR/TacticTrace`. A separate development checkout does not automatically
@@ -82,10 +83,60 @@ old data. Use paths visible to the proof process. If using Docker, explicitly
 pass these variables into the container and use mounted container paths;
 setting a host variable alone does not ensure the container receives it.
 
+## Command-line wrapper examples
+
+Run from this TacticTrace checkout. Replace `/path/to/rebuilt-proof.native` with
+the executable you built with this collector. Use a new output root every time.
+The parent directories may be created by the wrapper, but the root itself must
+not already exist. Bash runs the wrapper even if your interactive shell is zsh.
+
+```bash
+# Preview only. This does not run the proof or create output directories.
+bash run-with-sampling.sh \
+  --trace-sampling stratified-reservoir \
+  --trace-sampling-seed 42 \
+  --trace-output-root /tmp/tactic-stratified-preview \
+  --dry-run -- /path/to/rebuilt-proof.native
+
+# Run the old policy, with an isolated output root and sampling metadata.
+bash run-with-sampling.sh \
+  --trace-sampling legacy \
+  --trace-output-root /tmp/tactic-legacy-run1 \
+  -- /path/to/rebuilt-proof.native
+
+# Run the same rebuilt proof with the new policy and a fixed seed.
+bash run-with-sampling.sh \
+  --trace-sampling stratified-reservoir \
+  --trace-sampling-seed 42 \
+  --trace-output-root /tmp/tactic-stratified-run1 \
+  -- /path/to/rebuilt-proof.native
+```
+
+- `--trace-sampling` selects `legacy` or `stratified-reservoir`; default: `legacy`.
+- `--trace-sampling-seed` accepts decimal 0 through 2147483647; default: 0.
+  It is not a sample count. The wrapper normalizes leading zeros.
+- `--trace-output-root` is an absolute, new directory. It is required by the
+  wrapper even for legacy, so comparing policies does not mix output files.
+  Root paths containing newline or carriage-return characters are rejected.
+- `--` ends wrapper options. The following command and arguments are forwarded
+  without evaluating them as shell code.
+- `--dry-run` checks the wrapper options and prints the command, without checking
+  whether a proof has been rebuilt or whether its output will be valid.
+
+Wrapper flags override inherited sampling environment variables. The wrapper
+creates the new output root before starting the collector. Unlike the direct
+settings above, its seed flag accepts and normalizes leading zeros.
+
+When using Docker, run the wrapper **inside** the container with a mounted path
+to the rebuilt executable and a mounted output parent. This repository does not
+modify a project's `docker-compose.yml` or `scripts/run.sh`; exporting a variable
+on the host alone does not ensure that the container receives it. Paths passed
+to the wrapper must be valid inside the container.
+
 ## Output and provenance
 
-If the proof originally calls `exptrace_dump "/old/traces/proof.ml"`, setting an
-output root redirects that dump to:
+If the proof originally calls `exptrace_dump "/old/traces/proof.ml"`, the wrapper
+redirects that dump to:
 
 ```text
 <new-output-root>/
@@ -106,6 +157,10 @@ mistake it for tactic records. It includes:
 - Original and actual output paths.
 - Per-tactic counts rejected by size filters.
 - Per-tactic, per-bucket eligible arrival counts and final retained counts.
+
+The wrapper checks that the command succeeded and produced parseable metadata
+matching the selected settings and output paths. It preserves a failing command's
+exit status. Neither check establishes that the description quality improved.
 
 Keep the build commit, local source changes, HOL Light version, executable
 identity, input proofs, and invocation with the experiment record as well.
@@ -138,10 +193,13 @@ fixture. They do not run s2n-bignum proofs, overwrite a campaign, or make API ca
 
 ```bash
 make test-trace-sampling HOLLIGHT_DIR=/path/to/hol-light
+
+# The wrapper tests do not need a HOL Light build.
+python3 -B -m unittest discover -s tests -p test_sampling_runner.py -v
 ```
 
 The focused target is also included in `make test`, so the normal CI test command
-covers the sampler.
+covers the sampler and wrapper.
 
 Before deploying to a campaign, compare legacy retention against its existing
 baseline under that campaign's compiled limits and establish a separate rebuild
