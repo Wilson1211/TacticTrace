@@ -26,6 +26,7 @@ TESTS =\
   examples/conv.ml
 
 TEST_OUTPUTS = $(TESTS:.ml=.outdir)
+LAZY_TACTIC_ARGS_TEST = tests/lazy_tactic_args.native
 
 
 all: types_test tracer
@@ -56,8 +57,21 @@ ocamlTypes.cmo: ocamlTypes.ml
 
 # Collect the traces of the examples, then compare them against the expected
 # traces in examples/*.answer .
-test: $(TEST_OUTPUTS)
+test: $(TEST_OUTPUTS) test-lazy-tactic-args
 	HOLLIGHT_DIR=$(HOLLIGHT_DIR) ./check-answers.sh
+
+# This fixture calls the trace API directly, so it can observe exactly when an
+# argument generator runs without going through the AST instrumentation.
+test-lazy-tactic-args: $(LAZY_TACTIC_ARGS_TEST)
+	./$(LAZY_TACTIC_ARGS_TEST) > tests/lazy_tactic_args.hollog
+
+# Inline the collector and fixture while keeping original file names and lines.
+tests/lazy_tactic_args_wrapped.ml: tests/lazy_tactic_args.ml exportTrace.ml
+	$(HOLLIGHT_DIR)/hol.sh inline-load $< $@
+
+$(LAZY_TACTIC_ARGS_TEST): tests/lazy_tactic_args_wrapped.ml
+	$(HOLLIGHT_DIR)/hol.sh compile $< -o tests/lazy_tactic_args.cmx
+	$(HOLLIGHT_DIR)/hol.sh link tests/lazy_tactic_args.cmx -o $@
 
 examples/%.outdir: examples/%.ml tracer
 	@if [ "$$($(HOLLIGHT_DIR)/hol.sh -use-module)" != "1" ]; then \
@@ -76,5 +90,6 @@ examples/%.outdir: examples/%.ml tracer
 clean:
 	rm -f *.cmo *.cmi tracer types_test types_parser.ml types_parser.mli types_lexer.ml kernel_wrapper.ml
 	rm -rf $(TEST_OUTPUTS) examples/*.cm* examples/*_inlined* examples/*.o examples/*.hollog examples/*.native
+	rm -f tests/lazy_tactic_args_wrapped.ml tests/lazy_tactic_args.cm* tests/lazy_tactic_args.o tests/lazy_tactic_args.hollog $(LAZY_TACTIC_ARGS_TEST)
 
-.PHONY: all clean test
+.PHONY: all clean test test-lazy-tactic-args
