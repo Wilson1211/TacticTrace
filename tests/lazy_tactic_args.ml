@@ -35,11 +35,8 @@ let test_all_tac_records_interesting = ExportTrace.all_tac_records_interesting;;
 
 set_jrh_lexer;;
 
-let rec nested_conj n =
-  if n = 0 then `T`
-  else mk_conj (`T`,nested_conj (n - 1));;
-
-let make_record n = make_record_from_term n (nested_conj n);;
+let make_record n =
+  make_record_from_term n (list_mk_conj (replicate `T` (n + 1)));;
 
 let retained_labels =
   List.init test_max_num_records (fun i -> "retained-" ^ string_of_int i);;
