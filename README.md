@@ -176,6 +176,18 @@ Light. `upstream.yml` builds against HOL Light `master` weekly, to give early
 warning when upstream drifts away from us. It is kept separate so that it does
 not appear among the checks on a pull request.
 
+## Sampling runner
+
+`run-with-sampling.sh` launches a command with an explicit sampling policy,
+seed, and fresh output directory, then checks the collector's completion
+metadata. It requires Bash and Python 3. Before running a proof, rebuild it
+with the selectable sampling collector from the companion collector PR;
+the runner does not build proofs or refresh cached proof targets.
+
+See [the runner guide](docs/trace-sampling-runner.md) for usage and limitations.
+The wrapper tests run without HOL Light via `make test-sampling-runner` and
+are also included in `make test`.
+
 ## Versioning and releases
 
 Releases are tagged `ocaml-<version>/v<n>`, where `<version>` is the OCaml

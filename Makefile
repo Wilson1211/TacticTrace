@@ -31,6 +31,13 @@ LAZY_TACTIC_ARGS_TEST = tests/lazy_tactic_args.native
 
 all: types_test tracer
 
+test-sampling-runner:
+	python3 -B -m unittest discover -s tests -p 'test_sampling_runner.py' -v
+
+test: test-sampling-runner
+
+.PHONY: test-sampling-runner
+
 tracer: $(TYPES_OBJECTS) tracer.ml
 	$(OCAMLFIND) $(OCAMLC) -package compiler-libs.common $(OCAMLCPARAM) -linkpkg -o tracer $^
 
