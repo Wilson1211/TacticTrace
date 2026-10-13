@@ -126,6 +126,17 @@ Therefore, if you want to extract the string representation of goal from the sou
 **Theorems inside modules.**
 TacticTrace will not catch tactics that are defined inside a module.
 
+## Optional tactic sampling
+
+The collector defaults to the existing `legacy` retention policy. Rebuilt proofs
+can opt into `stratified-reservoir` to sample successful tactic records in three
+groups: zero, one, and two or more resulting subgoals. Size filters, conversion
+retention, and the compiled record capacity are unchanged.
+
+See [sampling policies and runtime settings](docs/trace-sampling.md) for output
+isolation, deterministic seeds, metadata, and build requirements. Environment
+settings do not add sampling support to an existing proof executable.
+
 ## Testing
 
 `make test` runs the proofs in `examples/` through the full pipeline of steps 1
@@ -147,6 +158,14 @@ test checks that arguments are not rendered while records are added, retained
 arguments are rendered once during the dump, and a discarded candidate is
 never rendered. It covers tactic records only; conversion argument rendering
 remains eager and is covered by the existing conversion answer tests.
+
+The focused sampling tests also run as part of `make test`. They compile this
+checkout's collector into a fresh synthetic fixture on every invocation and
+preserve the build, logs, and test outputs under `tests/_trace_sampling/`:
+
+```sh
+make test-trace-sampling HOLLIGHT_DIR=/path/to/hol-light
+```
 
 `make test` fails if HOL Light was not built with `HOLLIGHT_USE_MODULE=1`, since
 no traces can be collected without it.
