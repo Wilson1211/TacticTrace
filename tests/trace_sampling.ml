@@ -66,6 +66,22 @@ let add_conversion id length =
 
 let fixture_main () =
   let scenario = Sys.argv.(1) and output = Sys.argv.(2) in
+  if Array.length Sys.argv > 4 then begin
+    let quotas = if Sys.argv.(7) = "" then
+      Array.copy default_sampling_config.bucket_quotas
+      else Array.of_list
+        (List.map int_of_string (String.split_on_char ',' Sys.argv.(7))) in
+    let config = { default_sampling_config with
+      policy = Sys.argv.(4); selection_mode = Sys.argv.(5);
+      seed = Int64.of_string Sys.argv.(6);
+      bucket_quotas = quotas;
+      backfill = Sys.argv.(8) = "true";
+      output_root = if Sys.argv.(9) = "" then None else Some Sys.argv.(9);
+    } in
+    configure_sampling config;
+    (* A caller may reuse its array; the collector owns a defensive copy. *)
+    Array.fill quotas 0 (Array.length quotas) 0
+  end;
   if scenario = "dump-only" then exptrace_dump output else begin
     Random.init 8147;
     let expected_global_draw = Random.bits () in
@@ -78,6 +94,8 @@ let fixture_main () =
       end;
       add "balanced" (1000 + i) (i mod 3) 12
     done;
+    for i = 0 to 99 do add "five" (7000 + i) (i mod 5) 12 done;
+    for i = 0 to 59 do add "only_one" (8000 + i) 1 12 done;
     for i = 0 to 99 do add "rare" (2000 + i) 1 12 done;
     add "rare" 2200 0 12;
     add "rare" 2201 3 12;
@@ -86,6 +104,12 @@ let fixture_main () =
     for i = 0 to 39 do add "ties" (4000 + i) (i mod 3) 110 done;
     for i = 0 to 49 do add "short" (5000 + i) 0 5 done;
     if scenario <> "noise" then assert (Random.bits () = expected_global_draw);
+    if scenario = "late-config" then begin
+      let sealed = try
+        configure_sampling default_sampling_config; false
+      with Invalid_argument _ -> true in
+      assert sealed
+    end;
     assert (!forced_args = []);
 
     (* All three size filters must reject before creating or forcing arguments. *)
@@ -120,7 +144,7 @@ let fixture_main () =
     forced_args := [];
     let retained_ids = Hashtbl.fold (fun _ rs acc ->
       List.fold_left (fun acc ((r:tac_record),_,_) -> snd r.user_line_number :: acc) acc rs)
-      tac_logs [] in
+      (sampled_tac_logs (get_sampling_config ())) [] in
     exptrace_dump output;
     assert (List.sort compare !forced_args = List.sort compare retained_ids);
     assert (not (List.exists (fun n -> n >= 9000 && n < 10000) !forced_args));
