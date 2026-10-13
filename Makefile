@@ -33,6 +33,7 @@ all: types_test tracer
 
 test-sampling-runner:
 	python3 -B -m unittest discover -s tests -p 'test_sampling_runner.py' -v
+	python3 -B -m unittest discover -s tests -p 'test_sampling_runtime.py' -v
 
 test: test-sampling-runner
 

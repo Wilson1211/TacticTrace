@@ -16,7 +16,6 @@ FIXTURE = Path(__file__).resolve().with_name("sampling_runner_fixture.py")
 
 class SamplingRunnerTests(unittest.TestCase):
     def setUp(self):
-        # All output belongs to this test, never to an existing campaign.
         self.temp = tempfile.TemporaryDirectory(prefix="sampling-runner-test-")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / "new run"
@@ -34,48 +33,93 @@ class SamplingRunnerTests(unittest.TestCase):
         return [sys.executable, str(FIXTURE), *args]
 
     def fake_collector(self):
-        # Only emulate the interface; collector behavior has separate HOL tests.
         return self.fixture("collect", "an argument with spaces", "$(not-a-shell-command)")
+
+    def metadata(self, root=None):
+        return json.loads(((root or self.root) / "proof.sampling.json").read_text())
 
     def test_preview_has_no_side_effects(self):
         root = self.root / "parent" / "run"
         result = self.run_wrapper([
-            "--trace-sampling", "stratified-reservoir", "--trace-sampling-seed", "42",
-            "--trace-output-root", str(root), "--dry-run",
+            "--trace-sampling", "stratified-reservoir", "--selection-mode", "random",
+            "--trace-sampling-seed", "42", "--trace-output-root", str(root), "--dry-run",
         ])
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Selection mode: random", result.stdout)
         self.assertIn("Policy: stratified-reservoir", result.stdout)
         self.assertFalse(self.root.exists())
 
-    def test_legacy_default_overrides_inherited_configuration(self):
+    def test_default_is_legacy_and_explicit_without_ambient_settings(self):
         env = dict(os.environ, TRACE_SAMPLING_POLICY="stratified-reservoir",
                    TRACE_SAMPLING_SEED="99", TRACE_SAMPLING_OUTPUT_ROOT="/unused")
         result = self.run_wrapper(["--trace-output-root", str(self.root)],
                                   self.fake_collector(), env)
         self.assertEqual(result.returncode, 0, result.stderr)
-        data = json.loads((self.root / "proof.sampling.json").read_text())
-        self.assertEqual(data["TRACE_SAMPLING_POLICY"], "legacy")
-        self.assertEqual(data["TRACE_SAMPLING_SEED"], "0")
+        data = self.metadata()
+        self.assertEqual(data["config"][:3], ["tactictrace-config-v2", "legacy", "0"])
+        self.assertEqual(data["config"][5:], ["0", "deterministic"])
+        self.assertEqual(data["ambient"], {name: None for name in data["ambient"]})
         self.assertEqual(data["argv"], ["an argument with spaces", "$(not-a-shell-command)"])
+        self.assertEqual((self.root / ".tactictrace-config.accepted").read_text(),
+                         "tactictrace-config-v2:explicit-noexec-probe\n")
 
-    def test_stratified_flags_and_leading_zero_seed(self):
+    def test_deterministic_stratified_defaults_and_random_seed(self):
         result = self.run_wrapper([
-            "--trace-sampling", "stratified-reservoir", "--trace-sampling-seed", "00042",
+            "--trace-sampling", "stratified-reservoir",
             "--trace-output-root", str(self.root),
         ], self.fake_collector())
         self.assertEqual(result.returncode, 0, result.stderr)
-        data = json.loads((self.root / "proof.sampling.json").read_text())
-        self.assertEqual(data["TRACE_SAMPLING_POLICY"], "stratified-reservoir")
-        self.assertEqual(data["TRACE_SAMPLING_SEED"], "42")
+        self.assertEqual(self.metadata()["config"][2::4], ["0", "deterministic"])
+        self.assertEqual(self.metadata()["bucket_capacities"], [7, 7, 6])
+        second = Path(self.temp.name) / "random run"
+        result = self.run_wrapper([
+            "--trace-sampling", "stratified-reservoir", "--selection-mode", "random",
+            "--trace-sampling-seed", "00042", "--trace-output-root", str(second),
+        ], self.fake_collector())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.metadata(second)["config"][2], "42")
+        self.assertEqual(self.metadata(second)["selection_mode"], "random")
+
+    def test_custom_quotas_and_backfill(self):
+        for values in ("20", "2,2,2", "1,2,3,4,5"):
+            with self.subTest(values=values):
+                root = Path(self.temp.name) / values.replace(",", "-")
+                result = self.run_wrapper([
+                    "--trace-sampling", "stratified-reservoir",
+                    "--trace-success-quotas", values,
+                    "--trace-success-backfill", "--trace-output-root", str(root),
+                ], self.fake_collector())
+                self.assertEqual(result.returncode, 0, result.stderr)
+                data = self.metadata(root)
+                self.assertEqual(data["bucket_capacities"], [int(q) for q in values.split(",")])
+                self.assertTrue(data["backfill"])
+
+    def test_backfill_uses_empty_group_quota(self):
+        result = self.run_wrapper([
+            "--trace-sampling", "stratified-reservoir", "--trace-success-quotas", "2,2,2",
+            "--trace-success-backfill", "--trace-output-root", str(self.root),
+        ], self.fixture("collect", "sparse"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        stats = self.metadata()["tactics"]["sample"]
+        self.assertEqual(stats["effective_bucket_capacities"], [0, 3, 3])
 
     def test_invalid_options_do_not_create_output(self):
         cases = [
             ["--trace-sampling", "unknown"],
-            ["--trace-sampling-seed", "-1"],
-            ["--trace-sampling-seed", "2147483648"],
-            ["--trace-sampling-seed", "999999999999999999999"],
-            ["--trace-sampling-seed", "0x10"],
-            ["--trace-sampling-seed", "1.5"],
+            ["--selection-mode", "unknown"],
+            ["--trace-sampling-seed", "3"],
+            ["--trace-sampling", "stratified-reservoir", "--trace-sampling-seed", "0"],
+            ["--trace-sampling", "stratified-reservoir", "--selection-mode", "random",
+             "--trace-sampling-seed", "-1"],
+            ["--trace-sampling", "stratified-reservoir", "--selection-mode", "random",
+             "--trace-sampling-seed", "2147483648"],
+            ["--trace-success-quotas", "1,2,3"],
+            ["--trace-success-backfill"],
+            ["--selection-mode", "random"],
+            ["--trace-sampling", "stratified-reservoir", "--trace-success-quotas", "1,,2"],
+            ["--trace-sampling", "stratified-reservoir", "--trace-success-quotas", "0,0,0"],
+            ["--trace-sampling", "stratified-reservoir", "--trace-success-quotas", "1,2"],
+            ["--trace-sampling", "stratified-reservoir", "--trace-success-quotas", "2147483648"],
             ["--unknown-option"],
         ]
         for flags in cases:
@@ -102,19 +146,43 @@ class SamplingRunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertTrue(self.root.is_symlink())
 
+    def test_old_native_is_rejected_without_execution(self):
+        native = Path(self.temp.name) / "old.native"
+        marker = Path(self.temp.name) / "executed"
+        native.write_text(f"#!/bin/sh\ntouch '{marker}'\n")
+        native.chmod(0o755)
+        result = self.run_wrapper(["--trace-output-root", str(self.root)], [str(native)])
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("unsupported native", result.stderr)
+        self.assertFalse(marker.exists())
+        self.assertFalse(self.root.exists())
+
+    def test_reserved_argument_is_rejected_before_execution(self):
+        result = self.run_wrapper(["--trace-output-root", str(self.root)],
+                                  self.fixture("exit", "0", "--tactictrace-config", "fake"))
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(self.root.exists())
+
     def test_failed_command_returns_its_status_and_keeps_output(self):
         result = self.run_wrapper(["--trace-output-root", str(self.root)],
                                   self.fixture("fail"))
         self.assertEqual(result.returncode, 7)
-        self.assertTrue(self.root.is_dir())
         self.assertEqual((self.root / "partial.txt").read_text(), "partial output")
+        self.assertTrue((self.root / ".tactictrace-config").is_file())
 
-    def test_missing_collector_metadata_is_not_a_successful_run(self):
+    def test_missing_metadata_is_not_success(self):
         result = self.run_wrapper(["--trace-output-root", str(self.root)],
                                   self.fixture("exit", "0"))
         self.assertEqual(result.returncode, 1)
-        self.assertIn("no sampling metadata", result.stderr)
+        self.assertIn("did not acknowledge", result.stderr)
         self.assertTrue(self.root.is_dir())
+
+    def test_old_script_with_fabricated_sidecar_is_not_success(self):
+        result = self.run_wrapper(["--trace-output-root", str(self.root)],
+                                  self.fixture("old"))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("did not acknowledge", result.stderr)
+        self.assertTrue((self.root / "proof.sampling.json").is_file())
 
     def test_requires_command_separator_and_command(self):
         for args in ([], ["--trace-sampling"], ["--"]):
@@ -126,13 +194,15 @@ class SamplingRunnerTests(unittest.TestCase):
                                   self.fixture("incomplete"))
         self.assertEqual(result.returncode, 1)
         self.assertIn("completion check failed", result.stderr)
-        self.assertTrue((self.root / "proof.sampling.json").exists())
 
-    def test_metadata_must_match_settings_and_real_output_path(self):
+    def test_metadata_must_match_settings_and_output(self):
         cases = {
-            "wrong-policy": {"policy": "stratified-reservoir"},
+            "wrong-policy": {"policy": "legacy"},
             "wrong-seed": {"seed": 99},
-            "wrong-version": {"policy_version": 2},
+            "wrong-version": {"policy_version": 1},
+            "wrong-mode": {"selection_mode": "random"},
+            "wrong-backfill": {"backfill": True},
+            "wrong-quotas": {"bucket_capacities": [1, 1, 1]},
             "missing-output": {"actual_output_path": "missing"},
             "wrong-sidecar-name": {"actual_output_path": "another"},
         }
@@ -140,7 +210,9 @@ class SamplingRunnerTests(unittest.TestCase):
             with self.subTest(name=name):
                 root = Path(self.temp.name) / name
                 command = self.fixture("mismatch", json.dumps(changes))
-                result = self.run_wrapper(["--trace-output-root", str(root)], command)
+                result = self.run_wrapper([
+                    "--trace-sampling", "stratified-reservoir", "--trace-output-root", str(root),
+                ], command)
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertIn("completion check failed", result.stderr)
 
@@ -158,7 +230,7 @@ class SamplingRunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.root / "proof.sampling.json").is_file())
 
-    def test_missing_validator_fails_before_creating_output_or_running_command(self):
+    def test_missing_validator_fails_before_creating_output(self):
         runner = Path(self.temp.name) / RUNNER.name
         shutil.copyfile(RUNNER, runner)
         result = self.run_wrapper(["--trace-output-root", str(self.root)],

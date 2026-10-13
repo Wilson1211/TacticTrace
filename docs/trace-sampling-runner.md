@@ -1,79 +1,103 @@
 # Sampling runner
 
-`run-with-sampling.sh` sets the sampling policy, seed, and output root for a
-child command. When the command succeeds, `check-sampling-output.py` checks
-the collector's completion metadata. Both files must stay in the same directory;
-the runner can be called from any working directory.
+`run-with-sampling.sh` launches an instrumented proof with an explicit sampling
+configuration. The runner creates a new output root and a versioned data file;
+`sampling_runtime.ml`, embedded by `modify-proof.sh`, reads that file and calls
+`ExportTrace.configure_sampling` before proof code runs. No OCaml source is
+built from the supplied settings. After the proof, the runner verifies the
+adapter acknowledgement and each collector sidecar.
 
 ## Requirements
 
-- Bash and Python 3, using only the Python standard library.
-- A proof executable rebuilt with the selectable sampling collector from the
-  companion collector PR. The standalone runner PR does not include that
-  collector change.
+- Bash, Python 3, and a proof executable freshly built with the companion
+  collector PR **and** this adapter. Rebuild the instrumented source; changing
+  `exportTrace.ml` or `sampling_runtime.ml` does not update an old `.native`.
 - A new absolute output directory for each run.
 
-The runner does not compile proofs, install the collector, or invalidate
-cached `.correct` targets. Check the executable's build provenance before
-running it. An older binary can write to its original output location before
-the runner detects missing sampling metadata.
+The runner does not compile proofs or invalidate cached `.correct` targets.
+The normal `modify-proof.sh` flow embeds the adapter after `exportTrace.ml` and
+before the instrumented proof. An invocation without `--tactictrace-config`
+keeps the collector's legacy behavior and original dump path.
 
 ## Usage
 
-After rebuilding the proof with the selectable collector, preview a run:
+Preview a deterministic stratified run:
 
 ```sh
 bash /path/to/TacticTrace/run-with-sampling.sh \
   --trace-sampling stratified-reservoir \
-  --trace-sampling-seed 42 \
   --trace-output-root /absolute/path/to/new-run \
-  --dry-run -- /path/to/proof.native
+  --dry-run -- /path/to/rebuilt-proof.native
 ```
 
-Remove `--dry-run` to run the command. A preview prints the settings and
-shell-quoted command without creating directories or starting the proof.
-Put the command and its arguments after `--`; argument boundaries are preserved.
+Remove `--dry-run` to run it. To reproduce the prior random reservoir behavior,
+select random explicitly and supply a seed:
+
+```sh
+bash /path/to/TacticTrace/run-with-sampling.sh \
+  --trace-sampling stratified-reservoir \
+  --selection-mode random --trace-sampling-seed 42 \
+  --trace-output-root /absolute/path/to/random-run \
+  -- /path/to/rebuilt-proof.native
+```
 
 | Option | Meaning |
 | --- | --- |
 | `--trace-sampling POLICY` | `legacy` (default) or `stratified-reservoir` |
-| `--trace-sampling-seed N` | Decimal integer from 0 to 2147483647 (default: 0); leading zeros are accepted |
+| `--selection-mode MODE` | `deterministic` (default) or `random`; random requires stratified sampling |
+| `--trace-sampling-seed N` | Decimal integer in 0..2147483647, allowed only with random mode; default 0 |
+| `--trace-success-quotas CSV` | Stratified group quotas: 1, 3, or 5 nonnegative integers with positive total; default `7,7,6` |
+| `--trace-success-backfill` | Allow groups with eligible records to use unused quota at dump time; requires stratified sampling |
 | `--trace-output-root DIR` | Required new absolute directory; existing paths and dangling symlinks are refused |
-| `--dry-run` | Print the run without creating files or executing the command |
-| `--help` | Show usage |
+| `--dry-run` | Print settings and shell-quoted command without creating files or executing the command |
 
-The child receives `TRACE_SAMPLING_POLICY`, `TRACE_SAMPLING_SEED`, and
-`TRACE_SAMPLING_OUTPUT_ROOT`. These override inherited values, including when
-the default policy and seed are used. The caller's environment is unchanged.
+One quota groups all records as `0+`; three use `0,1,2+`; five use
+`0,1,2,3,4+` resulting subgoals. A zero quota disables its group. The
+collector documentation defines deterministic selection and backfill order.
 
-For a proof in Docker, run the wrapper inside the container and use paths
-visible there. The runner does not enter containers or translate host paths.
+The command and its arguments follow `--`; argument boundaries are preserved.
+The runner appends `--tactictrace-config PATH` and clears inherited legacy
+`TRACE_SAMPLING_*` variables from the child. The data file holds seven lines:
+protocol version, policy, seed, output root, quota CSV (empty means defaults),
+backfill flag, and selection mode. The caller's environment is unchanged.
+
+For Docker proofs, run the wrapper inside the container with paths visible
+there. It does not enter containers or translate host paths.
 
 ## Output and failures
 
-The selectable collector writes a trace directory named after each original
-dump basename and a sibling `<basename>.sampling.json` file under the output
-root. The runner requires at least one metadata file. Each file must report
-policy version 1, the requested policy and seed, and an existing trace directory
-directly under the root with the matching sidecar name.
+A completed run has this layout:
 
-Invalid options return status 2 before the command starts. A failed child
-command keeps its exit status. A successful command with missing, malformed,
-or inconsistent metadata returns status 1. All created output is retained on
-failure, including incomplete metadata files; choose a new root to retry.
+```text
+<new-output-root>/
+  .tactictrace-config             # Requested settings
+  .tactictrace-config.accepted    # Adapter acknowledgement
+  proof.ml/                       # Tactic/conversion JSON records
+  proof.ml.sampling.json          # Selection settings and counters
+```
 
-The completion check detects a skipped proof target or an old collector that
-produced no sampling metadata. It does not verify executable provenance,
-trace contents, proof coverage, or whether sampling improves downstream results.
+The runner requires at least one sidecar. It checks policy version 1 for legacy
+or 2 for stratified, policy, mode, seed, quotas, backfill, tactic bucket counts,
+and a matching trace directory directly under the root. The adapter writes
+its acknowledgement before proof code, after accepting the config.
 
-## Wrapper tests
+For a **direct** `.native` command, the runner scans the binary for the adapter
+capability marker before execution; an old binary is refused without running a
+proof as a probe. Indirect commands such as `bash wrapper.sh` are checked only
+after they run, so verify the wrapped executable's provenance separately.
+Neither check proves trace contents or proof coverage.
+
+Invalid options return status 2 before output creation. A failed child keeps
+its exit status. Missing or mismatched metadata returns status 1. Partial
+output and settings remain on failure; choose a new root to retry.
+
+## Focused tests
 
 ```sh
 make test-sampling-runner
 bash -n run-with-sampling.sh
 ```
 
-These tests use a small Python fixture to exercise command arguments,
-configuration, output preservation, and metadata checks. They do not run
-HOL Light or establish the collector's sampling behavior. `make test` also
-includes them alongside the existing native tests.
+The runner tests use a synthetic command; the adapter tests compile the real
+OCaml parser against a small collector API stub. They do not execute real
+proofs. The companion collector PR has separate HOL Light fixture tests.

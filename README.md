@@ -178,15 +178,16 @@ not appear among the checks on a pull request.
 
 ## Sampling runner
 
-`run-with-sampling.sh` launches a command with an explicit sampling policy,
-seed, and fresh output directory, then checks the collector's completion
-metadata. It requires Bash and Python 3. Before running a proof, rebuild it
-with the selectable sampling collector from the companion collector PR;
-the runner does not build proofs or refresh cached proof targets.
+`run-with-sampling.sh` gives a rebuilt proof a versioned, explicit sampling
+configuration. Stratified selection defaults to deterministic; random reservoir
+selection is opt-in. `modify-proof.sh` embeds `sampling_runtime.ml` so the
+collector receives settings before proof code. The runner checks its
+acknowledgement and the trace sidecars in a fresh output directory. It requires
+Bash and Python 3; it does not build proofs or refresh cached proof targets.
 
 See [the runner guide](docs/trace-sampling-runner.md) for usage and limitations.
-The wrapper tests run without HOL Light via `make test-sampling-runner` and
-are also included in `make test`.
+The focused runner and OCaml adapter tests run via `make test-sampling-runner`
+and are also included in `make test`.
 
 ## Versioning and releases
 
