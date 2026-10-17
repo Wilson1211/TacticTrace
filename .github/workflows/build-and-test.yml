@@ -14,14 +14,6 @@ on:
         description: 'The runner to build on. Linux and MacOS are supported.'
         type: string
         default: 'ubuntu-24.04'
-      hol-light-repository:
-        description: 'The HOL Light repository to build against.'
-        type: string
-        default: 'jrh13/hol-light'
-      hol-light-ref:
-        description: 'The HOL Light branch, tag or commit to build against.'
-        type: string
-        required: true
 
 permissions:
   contents: read
@@ -34,7 +26,7 @@ env:
 jobs:
   build-and-test:
     runs-on: ${{ inputs.runs-on }}
-    name: ${{ inputs.runs-on }}, OCaml 5.4, camlp5 8.04
+    name: ${{ inputs.runs-on }}, make switch-5
     timeout-minutes: 180
 
     steps:
@@ -64,21 +56,19 @@ jobs:
           path: ~/.opam/download-cache
           key: opam-download-${{ runner.os }}-${{ runner.arch }}-ocaml-5.4.0-camlp5-8.04.00
 
+      # HOL Light is pinned so that a red build always means a change in this
+      # repository broke something, rather than upstream moving. Bump the ref
+      # deliberately; TacticTrace depends on HOL Light internals.
       - name: Checkout HOL Light
         uses: actions/checkout@v7
         with:
-          repository: ${{ inputs.hol-light-repository }}
-          ref: ${{ inputs.hol-light-ref }}
+          repository: jrh13/hol-light
+          ref: 217dd32e798d98926d3ab81ed3dfcdf435831e1f
           path: hol-light
 
       # TacticTrace's scripts find each other, hol_lib_inlined.mli and
       # kernel_wrapper.ml through $HOLLIGHT_DIR/TacticTrace, so this repository
-      # has to be checked out inside the HOL Light directory. HOL Light
-      # revisions up to and including efebbdc bundle their own copy of
-      # TacticTrace there; remove it so that ours is the one under test.
-      - name: Remove the TacticTrace copy bundled with HOL Light, if any
-        run: rm -rf hol-light/TacticTrace
-
+      # has to be checked out inside the HOL Light directory.
       - name: Checkout TacticTrace into hol-light/TacticTrace
         uses: actions/checkout@v7
         with:
@@ -125,7 +115,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: traces-${{ inputs.runs-on }}-${{ inputs.hol-light-ref }}
+          name: traces-${{ inputs.runs-on }}
           path: |
             hol-light/TacticTrace/examples/*.outdir
             hol-light/TacticTrace/examples/*.hollog

@@ -168,14 +168,6 @@ make test
 way the comparison does. Review the resulting diff before committing it, and run
 `make test` again to confirm it now passes.
 
-This is also what GitHub Actions runs, on Ubuntu and on MacOS; see
-`.github/workflows/`. `ci.yml` builds against a fixed HOL Light revision, so
-that a red build always means a change here broke something rather than upstream
-moving; bump the revision there when TacticTrace is updated for a newer HOL
-Light. `upstream.yml` builds against HOL Light `master` weekly, to give early
-warning when upstream drifts away from us. It is kept separate so that it does
-not appear among the checks on a pull request.
-
 ## Versioning and releases
 
 Releases are tagged `ocaml-<version>/v<n>`, where `<version>` is the OCaml
