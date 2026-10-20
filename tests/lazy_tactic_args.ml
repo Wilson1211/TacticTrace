@@ -30,8 +30,9 @@ let make_record_from_term n term =
   };;
 
 let test_max_num_records = ExportTrace.max_num_records;;
-let test_tac_logs = ExportTrace.tac_logs;;
-let test_all_tac_records_interesting = ExportTrace.all_tac_records_interesting;;
+(* A single group isolates argument laziness from stratification quotas. *)
+configure_sampling { default_sampling_config with
+  bucket_quotas = [|test_max_num_records|] };;
 
 set_jrh_lexer;;
 
@@ -51,16 +52,12 @@ List.iteri
 
 (* Adding records must not render arguments, even for records being retained. *)
 assert (!forced_args = []);;
-assert
-  (not
-    (test_all_tac_records_interesting
-      (Hashtbl.find test_tac_logs test_tactic_name)));;
-
-(* All retained goals exceed the interestingness cutoff, so this candidate is
-   compared with them and then discarded as the longest goal. *)
+(* The longer candidate must be compared and discarded without rendering. *)
 let dropped_label = "dropped";;
 exptrace_add_tac test_tactic_name (make_record 200) (make_args dropped_label);;
 assert (!forced_args = []);;
+let selected = sampled_tac_logs (get_sampling_config ());;
+assert (List.length (Hashtbl.find selected test_tactic_name) = test_max_num_records);;
 
 let dump_dir = Filename.temp_file "tactictrace-lazy-args-" ".outdir";;
 Sys.remove dump_dir;;

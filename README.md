@@ -126,6 +126,20 @@ Therefore, if you want to extract the string representation of goal from the sou
 **Theorems inside modules.**
 TacticTrace will not catch tactics that are defined inside a module.
 
+## Tactic sampling
+
+Successful tactic records are always grouped by the number of resulting
+subgoals. By default, the collector keeps up to 7 records for zero goals,
+7 for one goal, and 6 for two or more goals, per tactic. Within each group,
+it deterministically keeps the shortest printed input conclusions; earlier
+arrivals win ties. No configuration call is needed for these defaults.
+
+`ExportTrace.configure_sampling` can select one, three, or five groups,
+custom quotas, optional quota borrowing, or explicit seeded random selection.
+Size filters, conversion retention, and the trace record format are unchanged.
+See [sampling settings](docs/trace-sampling.md) for the API, output metadata,
+and rebuild requirements.
+
 ## Testing
 
 `make test` runs the proofs in `examples/` through the full pipeline of steps 1
@@ -148,6 +162,14 @@ arguments are rendered once during the dump, and a discarded candidate is
 never rendered. It covers tactic records only; conversion argument rendering
 remains eager and is covered by the existing conversion answer tests.
 
+The focused sampling tests also run as part of `make test`. They compile this
+checkout's collector into a fresh synthetic fixture on every invocation and
+preserve the build, logs, and test outputs under `tests/_trace_sampling/`:
+
+```sh
+make test-trace-sampling HOLLIGHT_DIR=/path/to/hol-light
+```
+
 `make test` fails if HOL Light was not built with `HOLLIGHT_USE_MODULE=1`, since
 no traces can be collected without it.
 
@@ -167,6 +189,11 @@ make test
 `examples/<name>.outdir` over `examples/<name>.answer`, normalizing them the same
 way the comparison does. Review the resulting diff before committing it, and run
 `make test` again to confirm it now passes.
+
+GitHub Actions runs the example checks, lazy-argument regression, and sampling
+suite as separate steps on Ubuntu and macOS. The HOL Light revision is pinned
+in `.github/workflows/build-and-test.yml`. Sampling build and test logs are
+uploaded even when a test fails.
 
 ## Versioning and releases
 

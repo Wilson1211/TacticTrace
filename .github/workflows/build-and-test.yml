@@ -109,7 +109,21 @@ jobs:
         run: |
           set -xe
           eval $(opam env --switch "$PWD" --set-switch)
-          make test -C TacticTrace
+          make test-examples -C TacticTrace
+
+      - name: Check lazy tactic arguments
+        working-directory: hol-light
+        run: |
+          set -xe
+          eval $(opam env --switch "$PWD" --set-switch)
+          make test-lazy-tactic-args -C TacticTrace
+
+      - name: Check deterministic and random tactic sampling
+        working-directory: hol-light
+        run: |
+          set -xe
+          eval $(opam env --switch "$PWD" --set-switch)
+          make test-trace-sampling -C TacticTrace
 
       - name: Upload the collected traces and HOL Light logs
         if: always()
@@ -119,4 +133,6 @@ jobs:
           path: |
             hol-light/TacticTrace/examples/*.outdir
             hol-light/TacticTrace/examples/*.hollog
+            hol-light/TacticTrace/tests/lazy_tactic_args.hollog
+            hol-light/TacticTrace/tests/_trace_sampling/**/*.log
           if-no-files-found: ignore
