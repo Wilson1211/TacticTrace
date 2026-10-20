@@ -125,6 +125,13 @@ jobs:
           eval $(opam env --switch "$PWD" --set-switch)
           make test-trace-sampling -C TacticTrace
 
+      - name: Check sampling runner and runtime configuration
+        working-directory: hol-light
+        run: |
+          set -xe
+          eval $(opam env --switch "$PWD" --set-switch)
+          make test-sampling-runner -C TacticTrace
+
       - name: Upload the collected traces and HOL Light logs
         if: always()
         uses: actions/upload-artifact@v5
