@@ -57,7 +57,7 @@ ocamlTypes.cmo: ocamlTypes.ml
 
 # Collect the traces of the examples, then compare them against the expected
 # traces in examples/*.answer .
-test: test-examples test-lazy-tactic-args test-trace-sampling
+test: test-examples test-lazy-tactic-args test-trace-sampling test-sampling-runner
 
 test-examples: $(TEST_OUTPUTS)
 	HOLLIGHT_DIR=$(HOLLIGHT_DIR) ./check-answers.sh
@@ -74,6 +74,10 @@ tests/lazy_tactic_args_wrapped.ml: tests/lazy_tactic_args.ml exportTrace.ml
 $(LAZY_TACTIC_ARGS_TEST): tests/lazy_tactic_args_wrapped.ml
 	$(HOLLIGHT_DIR)/hol.sh compile $< -o tests/lazy_tactic_args.cmx
 	$(HOLLIGHT_DIR)/hol.sh link tests/lazy_tactic_args.cmx -o $@
+
+test-sampling-runner:
+	python3 -B -m unittest discover -s tests -p 'test_sampling_runner.py' -v
+	python3 -B -m unittest discover -s tests -p 'test_sampling_runtime.py' -v
 
 # Use a fresh build for each invocation, including when HOL Light changes.
 test-trace-sampling:
@@ -98,4 +102,4 @@ clean:
 	rm -rf $(TEST_OUTPUTS) examples/*.cm* examples/*_inlined* examples/*.o examples/*.hollog examples/*.native
 	rm -f tests/lazy_tactic_args_wrapped.ml tests/lazy_tactic_args.cm* tests/lazy_tactic_args.o tests/lazy_tactic_args.hollog $(LAZY_TACTIC_ARGS_TEST)
 
-.PHONY: all clean test test-examples test-lazy-tactic-args test-trace-sampling
+.PHONY: all clean test test-examples test-lazy-tactic-args test-trace-sampling test-sampling-runner

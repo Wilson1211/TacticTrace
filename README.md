@@ -196,6 +196,21 @@ sampling suite as separate steps on Ubuntu and macOS. The HOL Light revision is
 pinned in `.github/workflows/build-and-test.yml`. Build and test logs are
 uploaded even when a test fails.
 
+## Sampling runner
+
+`run-with-sampling.sh` runs an instrumented proof with sampling settings chosen
+on the command line — the bucket quotas (1 or 5 of them), whether borrowing is
+on, and a new directory for the output — rather than the settings compiled into
+the proof. It passes them to the proof in a file. `modify-proof.sh` embeds
+`sampling_runtime.ml` in the proof, and it reads that file before any proof
+code runs. After the run, the runner checks the collected output against the
+settings. It needs Bash and Python 3, and does
+not build proofs.
+
+See [the sampling runner](docs/trace-sampling-runner.md) for the options and
+the output layout. `make test-sampling-runner` runs its tests, which `make
+test` includes and GitHub CI runs as its own step.
+
 ## Versioning and releases
 
 Releases are tagged `ocaml-<version>/v<n>`, where `<version>` is the OCaml

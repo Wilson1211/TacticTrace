@@ -29,6 +29,8 @@ echo "(* --- exportTrace.ml --- *)" >> $output
 cat ${basedir}/exportTrace.ml >> $output
 echo "(* --- kernel_wrapper.ml --- *)" >> $output
 cat ${basedir}/kernel_wrapper.ml >> $output
+echo "(* --- sampling_runtime.ml --- *)" >> $output
+cat ${basedir}/sampling_runtime.ml >> $output
 echo "" >> $output
 tail -n +3 ${output}.org >> $output
 echo "exptrace_dump \"${dumpdir}\";;" >>$output
