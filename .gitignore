@@ -25,3 +25,5 @@ tests/*.cm*
 tests/*.hollog
 tests/*.native
 tests/*.o
+# Fresh sampling fixture builds and their preserved test outputs.
+tests/_trace_sampling/
