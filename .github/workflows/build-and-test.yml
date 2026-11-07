@@ -96,6 +96,17 @@ jobs:
           make clean -C TacticTrace
           make -C TacticTrace
 
+      # The Makefile finds the local OPAM switch by itself, so it should also
+      # build without `opam env`. The GNU Make 3.81 that MacOS ships looks up
+      # recipe commands differently from newer versions, so this checks both.
+      - name: Build TacticTrace without opam env
+        working-directory: hol-light
+        run: |
+          set -xe
+          make --version | head -n 1
+          make clean -C TacticTrace
+          make -C TacticTrace
+
       - name: Build the trace-generating HOL Light kernel wrappers
         working-directory: hol-light
         run: |
