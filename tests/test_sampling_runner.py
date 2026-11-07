@@ -62,7 +62,8 @@ class SamplingRunnerTests(unittest.TestCase):
         received = self.received()
         self.assertEqual(received["config"][0], "tactictrace-sampling-config")
         # The runner names the exact trace directory and keeps everything under DIR.
-        self.assertEqual(received["config"][1], str(self.root / "traces"))
+        # It resolves symlinks in DIR, as in macOS's /var -> /private/var.
+        self.assertEqual(received["config"][1], str(self.root.resolve() / "traces"))
         self.assertEqual(sorted(path.name for path in self.root.iterdir()),
                          [".tactictrace-config", ".tactictrace-config.accepted",
                           "received.json", "traces", "traces.sampling.json"])
