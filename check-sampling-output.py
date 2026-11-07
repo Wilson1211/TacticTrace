@@ -13,7 +13,7 @@ BUCKET_NAMES = {
 }
 ACCEPTANCE = "tactictrace-sampling-config\n"
 SUMMARY_KEYS = {"backfill", "total_capacity", "bucket_names", "bucket_capacities",
-                "original_output_path", "actual_output_path", "tactics"}
+                "output_dir", "tactics"}
 
 
 def require(condition, message):
@@ -63,8 +63,11 @@ def check_output(root, quotas, backfill):
     require(accepted.is_file() and accepted.read_text() == ACCEPTANCE,
             "the command did not accept the sampling settings; rebuild it with "
             "sampling_runtime.ml included")
+    # The runner sends the traces to <root>/traces and nowhere else.
     summaries = sorted(root.glob("*.sampling.json"))
     require(summaries, "no sampling summary was produced")
+    require(summaries == [root / "traces.sampling.json"],
+            "expected exactly one sampling summary, traces.sampling.json")
     for path in summaries:
         data = json.loads(path.read_text())
         require(isinstance(data, dict), f"invalid sampling summary: {path.name}")
@@ -81,10 +84,9 @@ def check_output(root, quotas, backfill):
                 all(type(value) is int for value in data["bucket_capacities"]) and
                 data["bucket_capacities"] == expected and sum(expected) == total,
                 f"bucket quota settings do not match: {path.name}")
-        target = Path(data["actual_output_path"])
-        require(target.parent == root and target.is_dir() and
-                path == Path(str(target) + ".sampling.json"),
-                f"invalid trace output path: {path.name}")
+        target = Path(data["output_dir"])
+        require(target == root / "traces" and target.is_dir(),
+                f"invalid trace output directory: {path.name}")
         tactics = data["tactics"]
         require(isinstance(tactics, dict), f"invalid tactic counters: {path.name}")
         for name, stats in tactics.items():
@@ -119,13 +121,13 @@ def check_output(root, quotas, backfill):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("output_root", type=Path)
+    parser.add_argument("root", type=Path, help="the runner's output directory")
     parser.add_argument("quotas", help="comma-separated custom quotas, or empty for defaults")
     parser.add_argument("backfill", choices=("0", "1"))
     args = parser.parse_args()
     try:
         quotas = [int(value) for value in args.quotas.split(",")] if args.quotas else None
-        check_output(args.output_root, quotas, args.backfill == "1")
+        check_output(args.root, quotas, args.backfill == "1")
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"Error: sampling completion check failed: {exc}", file=sys.stderr)
         return 1

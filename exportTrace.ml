@@ -118,7 +118,7 @@ module ExportTrace = struct
   (***************************************************************************)
 
   type sampling_config = {
-    output_root: string option;
+    output_dir: string option;
     bucket_quotas: int array;
     backfill: bool;
   }
@@ -130,7 +130,7 @@ module ExportTrace = struct
   (* Each run keeps its own copy of the quota array, so a caller that reuses
      the array it passed in cannot change a run that has already started. *)
   let default_sampling_config = {
-    output_root = None;
+    output_dir = None;
     bucket_quotas = Array.copy default_bucket_quotas;
     backfill = true;
   }
@@ -146,17 +146,35 @@ module ExportTrace = struct
       invalid_arg "Trace bucket quotas require 1 or 5 nonnegative capacities";
     if Array.fold_left (+) 0 config.bucket_quotas < 1 then
       invalid_arg "Trace bucket quotas must have a positive total";
-    (match config.output_root with
+    (match config.output_dir with
      | None -> ()
-     | Some root ->
-       if Filename.is_relative root || not (Sys.file_exists root) ||
-          not (Sys.is_directory root) then
-         invalid_arg "Trace output root must be an absolute existing directory");
+     | Some dir ->
+       if Filename.is_relative dir then
+         invalid_arg "Trace output directory must be an absolute path";
+       let basename = Filename.basename dir in
+       if basename = "" || basename = "." || basename = ".." ||
+          dir.[String.length dir - 1] = '/' then
+         invalid_arg "Trace output directory must end in a directory name";
+       let parent = Filename.dirname dir in
+       if not (Sys.file_exists parent) || not (Sys.is_directory parent) then
+         invalid_arg "Parent of the trace output directory must be an existing directory");
     sampling_config := {config with bucket_quotas = Array.copy config.bucket_quotas}
 
   let get_sampling_config () =
     sampling_config_sealed := true;
     !sampling_config
+
+  (* Set by exptrace_set_default_dir: where the traces go unless the sampling
+     configuration names a directory. *)
+  let default_output_dir : string option ref = ref None
+
+  (* The one place the traces are written. *)
+  let effective_output_dir config =
+    match config.output_dir, !default_output_dir with
+    | Some dir, _ | None, Some dir -> dir
+    | None, None ->
+      invalid_arg "No trace output directory: set output_dir in the sampling \
+                   configuration, or call exptrace_set_default_dir"
 
   let bucket_names config =
     if Array.length config.bucket_quotas = 1 then [|"0+"|]
@@ -321,7 +339,7 @@ module ExportTrace = struct
     Buffer.add_char buffer '"';
     Buffer.contents buffer
 
-  let write_sampling_summary oc config original_path actual_path tac_logs =
+  let write_sampling_summary oc config output_dir tac_logs =
     let names = bucket_names config in
     Printf.fprintf oc
       "{\n  \"backfill\": %s,\n  \"total_capacity\": %d,\n"
@@ -331,8 +349,8 @@ module ExportTrace = struct
       ("[" ^ String.concat ", "
          (Array.to_list (Array.map string_of_int config.bucket_quotas)) ^ "]");
     Printf.fprintf oc
-      "  \"original_output_path\": %s,\n  \"actual_output_path\": %s,\n  \"tactics\": {"
-      (json_string original_path) (json_string actual_path);
+      "  \"output_dir\": %s,\n  \"tactics\": {"
+      (json_string output_dir);
     let tactics = List.sort compare
       (Hashtbl.fold (fun name _ names -> name :: names) sampling_stats []) in
     List.iteri (fun index name ->
@@ -361,6 +379,12 @@ module ExportTrace = struct
 
 end;;
 
+
+(* modify-proof.sh adds a call to this before the proof, with the directory it
+   was given. It is the output directory unless the sampling configuration
+   names another. *)
+let exptrace_set_default_dir (dir_path:string): unit =
+  ExportTrace.default_output_dir := Some dir_path;;
 
 let exptrace_add_tac (tactic_name:string)
         (re:ExportTrace.tac_record)
@@ -413,17 +437,12 @@ let exptrace_add_conv (conv_name:string)
       Hashtbl.replace logs conv_name new_records
     end;;
 
-let exptrace_dump (dir_path:string): unit =
+(* The dump is an explicit call that modify-proof.sh adds at the end of the
+   proof, not an at_exit handler. A proof that fails raises before reaching it,
+   so a failed proof writes no traces and no sampling summary. *)
+let exptrace_dump (): unit =
   let config = ExportTrace.get_sampling_config () in
-  let original_path = dir_path in
-  let dir_path = match config.output_root with
-    | None -> dir_path
-    | Some root ->
-      let basename = Filename.basename dir_path in
-      if dir_path = "" || basename = "" || basename = "." || basename = ".." ||
-         basename = Filename.dir_sep then
-        invalid_arg "Trace output path must have a nonempty directory basename";
-      Filename.concat root basename in
+  let dir_path = ExportTrace.effective_output_dir config in
   let tac_logs = ExportTrace.sampled_tac_logs config in
   let tac_rec_comp (_,_,i1) (_,_,i2) = ExportTrace.compare_tac_interestingness i1 i2 in
   let conv_logs = ExportTrace.conv_logs in
@@ -432,7 +451,7 @@ let exptrace_dump (dir_path:string): unit =
   (* Reserve the sampling summary exclusively before creating the trace
      directory. Neither an existing directory nor an existing summary may be
      replaced. *)
-  let summary_channel = match config.output_root with
+  let summary_channel = match config.output_dir with
     | None -> None
     | Some _ -> Some (open_out_gen [Open_wronly; Open_creat; Open_excl; Open_text]
         0o666 (dir_path ^ ".sampling.json")) in
@@ -530,7 +549,7 @@ let exptrace_dump (dir_path:string): unit =
   (match summary_channel with
    | None -> ()
    | Some oc ->
-     ExportTrace.write_sampling_summary oc config original_path dir_path tac_logs;
+     ExportTrace.write_sampling_summary oc config dir_path tac_logs;
      close_out oc)
   with exn ->
     (match summary_channel with None -> () | Some oc -> close_out_noerr oc);

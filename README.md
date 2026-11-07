@@ -68,6 +68,8 @@ users in `a_inlined.ml` so that they emit the inputs and outputs to a JSON file.
 ${HOLLIGHT_DIR}/TacticTrace/modify-proof.sh a_inlined.ml a_inlined_wrapped.ml /home/your/output/dir
 ```
 
+The last argument is the default directory the collected traces are written to.
+
 You can run the `a_inlined_wrapped.ml` by loading it on top of HOL Light REPL (`hol.sh`), or
 building it using the OCaml compiler. The following commands show how to build it using the OCaml
 native compiler.
@@ -138,8 +140,10 @@ buckets that have more records than they can keep.
 By default there are five buckets, for zero through four or more subgoals, and
 they share `max_num_records` evenly. `ExportTrace.configure_sampling` changes
 the quotas, collapses them to a single bucket, turns borrowing off, and can
-redirect a run into a fresh output directory together with a summary of what it
-collected. See [tactic sampling](docs/trace-sampling.md).
+write a run to a chosen output directory together with a summary of what it
+collected. The third argument of `modify-proof.sh` is the default output
+directory. The proof ends with an explicit `exptrace_dump ()`, so a proof that
+fails writes no traces. See [tactic sampling](docs/trace-sampling.md).
 
 ## Testing
 

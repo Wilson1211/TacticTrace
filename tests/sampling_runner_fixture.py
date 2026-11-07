@@ -18,13 +18,16 @@ def main():
     args = sys.argv[2:]
     assert args[-2] == "--tactictrace-config"
     config_path = Path(args[-1])
-    header, output_root, quotas_csv, backfill = config_path.read_text().splitlines()
+    header, output_dir, quotas_csv, backfill = config_path.read_text().splitlines()
     assert header == "tactictrace-sampling-config"
-    root = Path(output_root)
+    # The runner keeps the settings next to the trace directory it names.
+    root = config_path.parent
+    target = Path(output_dir)
+    assert target == root / "traces"
     # The sampling summary below must look exactly like a real one, so what this
     # stand-in received is reported separately for the tests to inspect.
     (root / "received.json").write_text(json.dumps(
-        {"config": [header, output_root, quotas_csv, backfill], "argv": args[:-2]}))
+        {"config": [header, output_dir, quotas_csv, backfill], "argv": args[:-2]}))
     if action != "unconfigured":
         Path(str(config_path) + ".accepted").write_text(
             "tactictrace-sampling-config\n")
@@ -32,15 +35,13 @@ def main():
         (root / "partial.txt").write_text("partial output")
         return 7
     if action == "incomplete":
-        (root / "proof.outdir.sampling.json").touch()
+        (root / "traces.sampling.json").touch()
         return 0
     if action not in ("collect", "mismatch", "unconfigured"):
         raise ValueError(f"unknown fixture action: {action}")
 
     quotas = [int(q) for q in quotas_csv.split(",")] if quotas_csv else [4, 4, 4, 4, 4]
     names = NAMES[len(quotas)]
-    # A real proof names the directory after the one compiled into it.
-    target = root / "proof.outdir"
     target.mkdir()
     seen = [20] * len(quotas)
     retained = list(quotas)
@@ -68,15 +69,13 @@ def main():
         "total_capacity": sum(quotas),
         "bucket_names": names,
         "bucket_capacities": quotas,
-        # A real proof reports the path compiled into it and the one it used.
-        "original_output_path": "/compiled-into-the-proof/proof.outdir",
-        "actual_output_path": str(target),
+        "output_dir": str(target),
         "tactics": summary_tactics,
     }
     if action == "mismatch":
         changes = json.loads(args[0])
-        if "actual_output_path" in changes:
-            changes["actual_output_path"] = str(root / changes["actual_output_path"])
+        if "output_dir" in changes:
+            changes["output_dir"] = str(root / changes["output_dir"])
         if "tactic_change" in changes:
             key, value = changes.pop("tactic_change")
             data["tactics"]["sample"][key] = value
@@ -87,7 +86,7 @@ def main():
         if changes.pop("no_trace_file", False):
             (target / "sample.json").unlink()
         data.update(changes)
-    (root / "proof.outdir.sampling.json").write_text(json.dumps(data))
+    (root / "traces.sampling.json").write_text(json.dumps(data))
     return 0
 
 

@@ -62,7 +62,8 @@ assert (List.length (Hashtbl.find selected test_tactic_name) = test_max_num_reco
 
 let dump_dir = Filename.temp_file "tactictrace-lazy-args-" ".outdir";;
 Sys.remove dump_dir;;
-exptrace_dump dump_dir;;
+exptrace_set_default_dir dump_dir;;
+exptrace_dump ();;
 
 (* Dumping renders each retained record once and never renders the discarded
    candidate. *)

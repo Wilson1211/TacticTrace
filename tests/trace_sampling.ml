@@ -42,6 +42,9 @@ let add_conversion id length =
 
 let fixture_main () =
   let scenario = Sys.argv.(1) and output = Sys.argv.(2) in
+  (* modify-proof.sh adds this line to a real proof. An empty name leaves the
+     default unset. *)
+  if output <> "" then exptrace_set_default_dir output;
   if Array.length Sys.argv > 4 then begin
     let quotas = if Sys.argv.(4) = "" then
       Array.copy default_sampling_config.bucket_quotas
@@ -50,13 +53,13 @@ let fixture_main () =
     let config = { default_sampling_config with
       bucket_quotas = quotas;
       backfill = Sys.argv.(5) = "true";
-      output_root = if Sys.argv.(6) = "" then None else Some Sys.argv.(6);
+      output_dir = if Sys.argv.(6) = "" then None else Some Sys.argv.(6);
     } in
     configure_sampling config;
     (* A caller may reuse its array; the collector owns a defensive copy. *)
     Array.fill quotas 0 (Array.length quotas) 0
   end;
-  if scenario = "dump-only" then exptrace_dump output else begin
+  if scenario = "dump-only" then exptrace_dump () else begin
     (* Spread over the first three buckets, far past any of their quotas. *)
     for i = 0 to 179 do
       if scenario = "noise" then add "unrelated" (10000 + i) (i mod 3) 12;
@@ -113,7 +116,9 @@ let fixture_main () =
     let retained_ids = Hashtbl.fold (fun _ rs acc ->
       List.fold_left (fun acc ((r:tac_record),_,_) -> snd r.user_line_number :: acc) acc rs)
       (sampled_tac_logs (get_sampling_config ())) [] in
-    exptrace_dump output;
+    (* A proof that fails never reaches its final dump call. *)
+    if scenario = "fail-before-dump" then failwith "stop";
+    exptrace_dump ();
     assert (List.sort compare !forced_args = List.sort compare retained_ids);
     assert (not (List.exists (fun n -> n >= 9000 && n < 10000) !forced_args))
 

@@ -38,7 +38,7 @@ class SamplingRunnerTests(unittest.TestCase):
         return self.fixture("collect", "an argument with spaces", "$(not-a-shell-command)")
 
     def summary(self, root=None):
-        return json.loads(((root or self.root) / "proof.outdir.sampling.json").read_text())
+        return json.loads(((root or self.root) / "traces.sampling.json").read_text())
 
     def received(self, root=None):
         return json.loads(((root or self.root) / "received.json").read_text())
@@ -61,6 +61,11 @@ class SamplingRunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         received = self.received()
         self.assertEqual(received["config"][0], "tactictrace-sampling-config")
+        # The runner names the exact trace directory and keeps everything under DIR.
+        self.assertEqual(received["config"][1], str(self.root / "traces"))
+        self.assertEqual(sorted(path.name for path in self.root.iterdir()),
+                         [".tactictrace-config", ".tactictrace-config.accepted",
+                          "received.json", "traces", "traces.sampling.json"])
         # Empty quotas mean the collector's own defaults; borrowing is on.
         self.assertEqual(received["config"][2:], ["", "1"])
         self.assertEqual(received["argv"],
@@ -173,7 +178,7 @@ class SamplingRunnerTests(unittest.TestCase):
                                   self.fixture("unconfigured"))
         self.assertEqual(result.returncode, 1)
         self.assertIn("did not accept", result.stderr)
-        self.assertTrue((self.root / "proof.outdir.sampling.json").is_file())
+        self.assertTrue((self.root / "traces.sampling.json").is_file())
 
     def test_requires_command_separator_and_command(self):
         for args in ([], ["--trace-success-no-backfill"], ["--"]):
@@ -190,8 +195,8 @@ class SamplingRunnerTests(unittest.TestCase):
         cases = {
             "wrong-borrowing": {"backfill": False},
             "wrong-quotas": {"bucket_capacities": [1, 1, 1, 1, 1]},
-            "missing-output": {"actual_output_path": "missing"},
-            "wrong-summary-name": {"actual_output_path": "another"},
+            "missing-output": {"output_dir": "missing"},
+            "not-the-traces-directory": {"output_dir": "."},
             "unknown-field": {"surprise": 1},
         }
         for name, changes in cases.items():
@@ -219,7 +224,7 @@ class SamplingRunnerTests(unittest.TestCase):
             ["--trace-success-quotas", "0,2,0,0,0", "--trace-output-root", str(self.root)],
             self.fixture("collect", "unfilled"))
         self.assertEqual(result.returncode, 0, result.stderr)
-        trace_dir = self.root / "proof.outdir"
+        trace_dir = self.root / "traces"
         self.assertTrue((trace_dir / "sample.json").is_file())
         self.assertFalse((trace_dir / "unfilled.json").exists())
         # A tactic that retained records must have its file.
@@ -268,7 +273,7 @@ class SamplingRunnerTests(unittest.TestCase):
             runner=Path("..") / runner_dir.name / RUNNER.name, cwd=cwd,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue((self.root / "proof.outdir.sampling.json").is_file())
+        self.assertTrue((self.root / "traces.sampling.json").is_file())
 
     def test_missing_validator_fails_before_creating_output(self):
         runner = Path(self.temp.name) / RUNNER.name

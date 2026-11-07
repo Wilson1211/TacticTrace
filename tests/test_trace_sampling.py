@@ -25,30 +25,34 @@ class TraceSamplingTests(unittest.TestCase):
         self.counter = 0
 
     def run_fixture(self, *, configure=False, quotas=None, backfill=True,
-                    scenario="standard", redirect=True, extra_env=None,
-                    existing=None, root_override=None):
+                    scenario="standard", explicit_dir=True, default_dir=True,
+                    extra_env=None, existing=None, dir_override=None):
+        """Run the fixture. The default directory plays the one modify-proof.sh
+        compiles into a proof; explicit_dir sets output_dir in the configuration."""
         self.counter += 1
-        case = self.base / str(self.counter)
+        case = self.case = self.base / str(self.counter)
         case.mkdir()
         original = case / "original"
         original.mkdir()
         # These legal path characters must be escaped in the sampling summary.
-        root = case / 'output "quoted" \\ path'
-        root.mkdir()
+        output_dir = case / 'output "quoted" \\ dir'
         requested = original / "proof.outdir"
-        target = (root if redirect else original) / requested.name
+        target = output_dir if explicit_dir else requested
         summary_path = Path(str(target) + ".sampling.json")
         if existing == "directory":
             target.mkdir()
             (target / "sentinel").write_text("keep directory")
         elif existing == "summary":
             summary_path.write_text("keep summary")
-        args = [str(NATIVE), scenario, str(requested), str(original / "oracle.outdir")]
+        args = [str(NATIVE), scenario, str(requested) if default_dir else "",
+                str(original / "oracle.outdir")]
         if configure:
+            if dir_override is not None:
+                configured = dir_override.format(case=case)
+            else:
+                configured = str(output_dir) if explicit_dir else ""
             args.extend(["" if quotas is None else ",".join(map(str, quotas)),
-                         str(backfill).lower(),
-                         str(root) if root_override is None and redirect
-                         else (root_override or "")])
+                         str(backfill).lower(), configured])
         env = dict(os.environ)
         env.update(extra_env or {})
         result = subprocess.run(args, env=env, text=True, capture_output=True, timeout=120)
@@ -75,7 +79,7 @@ class TraceSamplingTests(unittest.TestCase):
 
     def test_defaults_need_no_configuration_call(self):
         # Without configure_sampling: five buckets of four, borrowing on.
-        default, summary, target, requested = self.successful(redirect=False)
+        default, summary, target, requested = self.successful(explicit_dir=False)
         self.assertIsNone(summary)
         self.assertEqual(target, requested)
         expected = ({1000 + 3*j for j in range(7)} |
@@ -87,17 +91,20 @@ class TraceSamplingTests(unittest.TestCase):
         self.assertEqual(self.ids(default, "rare"),
                          {2200, 2201} | set(range(2000, 2018)))
         self.assertEqual(len(self.ids(default, "short")), 20)
-        explicit, summary, _, _ = self.successful(configure=True, redirect=False)
+        explicit, summary, _, _ = self.successful(configure=True, explicit_dir=False)
         self.assertIsNone(summary)
         self.assertEqual(default, explicit)
-        redirected, summary, _, _ = self.successful(configure=True)
-        self.assertEqual(default, redirected)
+        configured, summary, target, requested = self.successful(configure=True)
+        self.assertEqual(default, configured)
+        # output_dir replaces the default location rather than adding to it.
+        self.assertFalse(requested.exists())
+        self.assertEqual(summary["output_dir"], str(target))
         self.assertIs(summary["backfill"], True)
         self.assertEqual(summary["bucket_capacities"], [4, 4, 4, 4, 4])
         self.assertEqual(summary["bucket_names"], ["0", "1", "2", "3", "4+"])
 
     def test_record_json_schema_and_lazy_arguments(self):
-        traces, _, _, _ = self.successful(redirect=False)
+        traces, _, _, _ = self.successful(explicit_dir=False)
         fields = {"tactic", "definition_line_number", "user_line_number",
                   "arg_names", "arg_types", "arg_values", "arg_exprs",
                   "goal_before", "goals_after", "num_subgoals"}
@@ -119,13 +126,12 @@ class TraceSamplingTests(unittest.TestCase):
             configure=True, backfill=False)
         self.assertEqual(set(summary), {
             "backfill", "total_capacity", "bucket_names", "bucket_capacities",
-            "original_output_path", "actual_output_path", "tactics"})
+            "output_dir", "tactics"})
         self.assertIs(summary["backfill"], False)
         self.assertEqual(summary["bucket_capacities"], [4, 4, 4, 4, 4])
         self.assertEqual(summary["bucket_names"], ["0", "1", "2", "3", "4+"])
         self.assertEqual(summary["total_capacity"], 20)
-        self.assertEqual(summary["actual_output_path"], str(target))
-        self.assertEqual(summary["original_output_path"], str(requested))
+        self.assertEqual(summary["output_dir"], str(target))
         self.assertFalse(requested.exists())
         # "balanced" spreads over the first three buckets, which each keep the
         # four earliest of their own records; the last two buckets stay empty.
@@ -226,7 +232,7 @@ class TraceSamplingTests(unittest.TestCase):
                 noisy, _, _, _ = self.successful(**kwargs, scenario="noise")
                 for name in first:
                     self.assertEqual(first[name], noisy[name], name)
-                default, _, _, _ = self.successful(redirect=False)
+                default, _, _, _ = self.successful(explicit_dir=False)
                 self.assertEqual(first["conversion.json"], default["conversion.json"])
 
     def test_config_sealed_after_collection(self):
@@ -239,7 +245,12 @@ class TraceSamplingTests(unittest.TestCase):
             {"quotas": (1, 2, 3, 4)},
             {"quotas": (-1, 2, 2, 2, 2)},
             {"quotas": (0, 0, 0, 0, 0)},
-            {"root_override": "relative"},
+            {"dir_override": "relative/traces"},
+            {"dir_override": "{case}/missing parent/traces"},
+            {"dir_override": "{case}/."},
+            {"dir_override": "{case}/.."},
+            {"dir_override": "{case}/traces/"},
+            {"dir_override": "/"},
         ]
         for case in cases:
             with self.subTest(case=case):
@@ -248,15 +259,50 @@ class TraceSamplingTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(target.exists())
                 self.assertFalse(summary_path.exists())
+                self.assertEqual(list(self.case.glob("*.sampling.json")), [])
+                self.assertEqual(sorted(path.name for path in self.case.iterdir()),
+                                 ["original", "stderr.log", "stdout.log"])
+
+    def test_one_effective_output_location(self):
+        # modify-proof.sh sets the default; output_dir alone is enough without it.
+        traces, summary, target, requested = self.successful(
+            configure=True, default_dir=False)
+        self.assertTrue(target.is_dir())
+        self.assertIsNotNone(summary)
+        self.assertFalse(requested.exists())
+        # With neither, the dump has nowhere to write and says so.
+        result, target, summary_path, requested = self.run_fixture(
+            scenario="dump-only", default_dir=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("No trace output directory", result.stderr)
+        self.assertEqual(sorted(path.name for path in self.case.iterdir()),
+                         ["original", "stderr.log", "stdout.log"])
+        self.assertEqual(list((self.case / "original").iterdir()), [])
+
+    def test_failed_proof_writes_no_traces_and_no_summary(self):
+        # The dump is an explicit call at the end of the proof, so a proof that
+        # raises first leaves nothing behind, with or without output_dir.
+        for explicit_dir in (False, True):
+            with self.subTest(explicit_dir=explicit_dir):
+                result, target, summary_path, requested = self.run_fixture(
+                    scenario="fail-before-dump", configure=explicit_dir,
+                    explicit_dir=explicit_dir)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("stop", result.stderr)
+                self.assertFalse(target.exists())
+                self.assertFalse(requested.exists())
+                self.assertFalse(summary_path.exists())
+                self.assertEqual(sorted(path.name for path in self.case.iterdir()),
+                                 ["original", "stderr.log", "stdout.log"])
 
     def test_output_collisions_never_overwrite(self):
-        for redirect in (False, True):
+        for explicit_dir in (False, True):
             for existing in ("directory", "summary"):
-                if not redirect and existing == "summary":
-                    continue  # A sampling summary is only written for an explicit output root.
-                with self.subTest(redirect=redirect, existing=existing):
+                if not explicit_dir and existing == "summary":
+                    continue  # A sampling summary is only written when output_dir is configured.
+                with self.subTest(explicit_dir=explicit_dir, existing=existing):
                     result, target, summary_path, _ = self.run_fixture(
-                        configure=True, redirect=redirect,
+                        configure=True, explicit_dir=explicit_dir,
                         scenario="dump-only", existing=existing)
                     self.assertNotEqual(result.returncode, 0)
                     if existing == "directory":

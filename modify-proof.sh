@@ -1,5 +1,5 @@
 if [ "$#" -ne 3 ]; then
-  echo "modify-proof.sh <input(inlined).ml> <output.ml> <proof json dump dir>"
+  echo "modify-proof.sh <input(inlined).ml> <output.ml> <default trace dir>"
   exit 1
 fi
 input=$1
@@ -32,7 +32,9 @@ cat ${basedir}/kernel_wrapper.ml >> $output
 echo "(* --- sampling_runtime.ml --- *)" >> $output
 cat ${basedir}/sampling_runtime.ml >> $output
 echo "" >> $output
+# The default trace directory, used unless the sampling settings name one.
+echo "exptrace_set_default_dir \"${dumpdir}\";;" >> $output
 tail -n +3 ${output}.org >> $output
-echo "exptrace_dump \"${dumpdir}\";;" >>$output
+echo "exptrace_dump ();;" >>$output
 
 rm $input_bin $input_no_linedir

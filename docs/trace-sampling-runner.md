@@ -48,9 +48,9 @@ bash run-with-sampling.sh \
 The command to run follows `--`, and its arguments are passed through
 unchanged. The runner appends `--tactictrace-config PATH` to it.
 
-That file holds four lines: `tactictrace-sampling-config`, the output root, the
-quotas as comma-separated values (empty means the defaults), and `1` or `0` for
-borrowing. `sampling_runtime.ml` parses it and calls
+That file holds four lines: `tactictrace-sampling-config`, the output directory
+for the traces (`<DIR>/traces`), the quotas as comma-separated values (empty
+means the defaults), and `1` or `0` for borrowing. `sampling_runtime.ml` parses it and calls
 `ExportTrace.configure_sampling` before any proof code runs. The file is data,
 never OCaml source, so nothing in it is evaluated.
 
@@ -62,20 +62,20 @@ with paths that exist there. It does not enter containers or translate paths.
 A finished run leaves:
 
 ```text
-<output-root>/
+DIR/
   .tactictrace-config           # The settings the runner passed in
   .tactictrace-config.accepted  # Written by the proof once it accepts them
-  tactic.outdir/                # One JSON file per tactic and per conversion
-  tactic.outdir.sampling.json   # The sampling summary: settings and per-tactic counts
+  traces/                       # One JSON file per tactic and per conversion
+  traces.sampling.json          # The sampling summary: settings and per-tactic counts
 ```
 
-The name `tactic.outdir` is the basename of the dump directory compiled into the
-proof (here, from `examples/tactic.ml`); a proof built from another file uses
-its own name.
+The runner sets the output directory to `DIR/traces`, so the name does not
+depend on the proof. The default output directory compiled into the proof is
+not used.
 
-The runner then checks that the proof accepted the settings and that every
-sampling summary matches them: the quotas, the borrowing flag, the per-bucket counts,
-and a records directory in the right place. It also counts the records in each
+The runner then checks that the proof accepted the settings and that the
+sampling summary matches them: the quotas, the borrowing flag, the per-bucket
+counts, and the traces in `DIR/traces`. It also counts the records in each
 `<tactic>.json` and compares the number with the retained total in the summary.
 A tactic that kept no records has no file, so a missing file is accepted only
 when the summary reports zero retained records for it. A proof built without
@@ -92,7 +92,7 @@ be checked after it runs.
 
 | Situation | Exit status |
 | --- | --- |
-| The runner rejects something and runs nothing: bad options, an output root that is not new and absolute or cannot be created, a `.native` that cannot read the settings, a missing checker | 64 |
+| The runner rejects something and runs nothing: bad options, a `DIR` that is not new and absolute or cannot be created, a `.native` that cannot read the settings, a missing checker | 64 |
 | Settings or output missing or not matching | 1 |
 | The command itself failed | the command's own status |
 
@@ -103,7 +103,8 @@ internally, the runner reports 1 when it fails. A command that happens to exit
 with 64 or 1 cannot be told apart from a runner error by status alone; the
 message on standard error says which one it was.
 
-Nothing is created for an invalid invocation. When a run fails after starting,
+A proof that fails writes no traces and no summary, so a failed run leaves only
+the settings files. Nothing is created for an invalid invocation. When a run fails after starting,
 its directory is left in place to inspect; pick a new one to retry.
 
 ## Tests

@@ -26,7 +26,7 @@ let () =
         | exception End_of_file -> List.rev acc in
       read []) in
     let config : ExportTrace.sampling_config = match lines with
-      | [header; output_root; quotas; backfill]
+      | [header; output_dir; quotas; backfill]
         when header = sampling_config_header ->
         let defaults = ExportTrace.default_sampling_config in
         let bucket_quotas = if quotas = "" then defaults.bucket_quotas else
@@ -34,7 +34,7 @@ let () =
         let backfill = match backfill with
           | "0" -> false | "1" -> true
           | _ -> fail "backfill flag must be 0 or 1" in
-        { output_root = if output_root = "" then None else Some output_root;
+        { output_dir = if output_dir = "" then None else Some output_dir;
           bucket_quotas; backfill }
       | _ ->
         fail "expected a tactictrace-sampling-config header and three settings lines" in

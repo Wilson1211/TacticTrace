@@ -12,10 +12,10 @@ STUB = '''let unset_jrh_lexer = ();;
 let set_jrh_lexer = ();;
 module ExportTrace = struct
   type sampling_config = {
-    output_root: string option; bucket_quotas: int array; backfill: bool;
+    output_dir: string option; bucket_quotas: int array; backfill: bool;
   }
   let default_sampling_config = {
-    output_root=None; bucket_quotas=[|4;4;4;4;4|]; backfill=true;
+    output_dir=None; bucket_quotas=[|4;4;4;4;4|]; backfill=true;
   }
   let selected = ref default_sampling_config
   let configure_sampling config =
@@ -27,7 +27,7 @@ end;;
 FOOTER = '''let () =
   let config = !ExportTrace.selected in
   Printf.printf "%s\\n%b\\n"
-    (match config.output_root with None -> "<embedded>" | Some path -> path)
+    (match config.output_dir with None -> "<embedded>" | Some path -> path)
     config.backfill;
   print_endline (String.concat "," (Array.to_list (Array.map string_of_int config.bucket_quotas)));;
 '''
@@ -67,13 +67,27 @@ class SamplingRuntimeTests(unittest.TestCase):
         return result, Path(str(self.config) + ".accepted")
 
     def test_settings_are_passed_through_and_accepted(self):
-        root = '/tmp/a "quoted" path; no source execution'
+        output_dir = '/tmp/a "quoted" path; no source execution'
         result, accepted = self.invoke(
-            ["tactictrace-sampling-config", root, "2,2,2,2,2", "0"], "last argument")
+            ["tactictrace-sampling-config", output_dir, "2,2,2,2,2", "0"],
+            "last argument")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines()[:3],
-                         [root, "false", "2,2,2,2,2"])
+                         [output_dir, "false", "2,2,2,2,2"])
         self.assertEqual(accepted.read_text(), "tactictrace-sampling-config\n")
+
+    def test_output_directory_is_passed_on_as_written(self):
+        # The collector's configure_sampling judges the path, not this file
+        # reader, so it must reach configure_sampling unchanged.
+        for output_dir in ("relative/traces", "/no/such/parent/traces",
+                           "/tmp/.", "/tmp/..", "/tmp/traces/"):
+            with self.subTest(output_dir=output_dir):
+                Path(str(self.config) + ".accepted").unlink(missing_ok=True)
+                result, accepted = self.invoke(
+                    ["tactictrace-sampling-config", output_dir, "", "1"])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.splitlines()[0], output_dir)
+                self.assertTrue(accepted.is_file())
 
     def test_empty_settings_mean_the_collector_defaults(self):
         result, accepted = self.invoke(
@@ -93,7 +107,7 @@ class SamplingRuntimeTests(unittest.TestCase):
             (2, "01"), (2, "-1"), (2, "1; print_endline x"),
             (2, "1,,2,3,4"), (2, "1,2"), (2, "1,2,3"), (2, "1,2,3,4"),
             (3, "true"), (3, "bad"), (3, ""),
-            (1, "bad\rroot"), (1, "bad\x00root"),
+            (1, "bad\rdir"), (1, "bad\x00dir"),
         ]
         for index, value in cases:
             with self.subTest(index=index, value=value):

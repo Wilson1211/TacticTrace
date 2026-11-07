@@ -51,7 +51,7 @@ ExportTrace.configure_sampling {
   ExportTrace.default_sampling_config with
   bucket_quotas = [|4; 4; 4; 4; 4|];
   backfill = false;
-  output_root = Some "/absolute/path/to/new-run";
+  output_dir = Some "/absolute/path/to/new-run/traces";
 };;
 ```
 
@@ -59,41 +59,51 @@ ExportTrace.configure_sampling {
   (buckets `0`, `1`, `2`, `3`, `4+`). Each entry is a nonnegative quota, and
   the entries must add up to at least 1.
 - `backfill` turns borrowing on or off. It is on by default.
-- `output_root`, when set, must be an absolute path to an existing directory,
-  and redirects the dump into it. Use a fresh directory for each run. When it
-  is `None`, the dump writes to the path the proof passed to `exptrace_dump`.
+- `output_dir`, when set, is the directory the dump writes the traces to. It
+  must be an absolute path that ends in a directory name (not `.` or `..`), and
+  its parent must be an existing directory. The dump creates the directory
+  itself and refuses to reuse one that exists, so use a new one for each run.
+  When it is `None`, the dump writes to the default output directory.
 
 The settings are sealed once collection or dumping starts, so a later call
 raises instead of changing a run that is already under way.
 
 ## Output
 
-`exptrace_dump "/path/tactic.outdir"` writes one JSON file per tactic and per
-conversion into `/path/tactic.outdir/`. Records are written shortest conclusion
-first, and newest first among records of equal length.
+`exptrace_dump ()` writes one JSON file per tactic and per conversion into the
+output directory. Records are written shortest conclusion first, and newest
+first among records of equal length. A tactic that kept no records gets no file.
 
-With `output_root` set, the dump is redirected and also writes a **sampling
-summary**: a JSON file next to the records directory that reports the settings
-the run used and how many records it saw and kept. It sits outside the records
-directory so that it is never mistaken for a tactic's records.
+There is one output directory per run. It is `output_dir` when the
+configuration sets it. Otherwise it is the default output directory, which is
+the third argument of `modify-proof.sh`: the script adds a call to
+`exptrace_set_default_dir` before the proof, and `exptrace_dump ()` as the last
+line. A dump with neither raises `Invalid_argument`.
+
+The dump is an explicit call at the end of the proof, not an `at_exit`
+handler. A proof that fails with an exception never reaches it, so it writes no
+traces and no sampling summary.
+
+With `output_dir` set, the dump also writes a **sampling summary**: a JSON file
+next to the output directory, named after it with `.sampling.json` added, that
+reports the settings the run used and how many records it saw and kept. It sits
+outside the output directory so that it is never mistaken for a tactic's
+records. Without `output_dir` no summary is written.
 
 ```text
 /absolute/path/to/new-run/
-  tactic.outdir/                # One JSON file per tactic and per conversion
-  tactic.outdir.sampling.json   # The sampling summary
+  traces/                  # One JSON file per tactic and per conversion
+  traces.sampling.json     # The sampling summary
 ```
 
-Both names come from the basename of the directory passed to `exptrace_dump`,
-which `modify-proof.sh` compiles into the proof; `tactic.outdir` is the one
-for `examples/tactic.ml`. A tactic that kept no records gets no file.
-
 The sampling summary reports the borrowing flag, the total capacity, the bucket
-names and quotas, the requested and actual output paths, and, for each tactic,
-how many records a size filter rejected and how many each bucket saw and kept.
-When borrowing is on it also reports the capacity each bucket ended up with.
+names and quotas, the output directory, and, for each tactic, how many records
+a size filter rejected and how many each bucket saw and kept. When borrowing is
+on it also reports the capacity each bucket ended up with.
 
-A redirected dump refuses to replace an existing records directory or sampling
-summary, so a finished run cannot be overwritten by a later one.
+The dump refuses to replace an existing output directory or, when `output_dir`
+is set, an existing sampling summary, so a finished run cannot be overwritten
+by a later one.
 
 ## Tests
 
@@ -102,7 +112,8 @@ make test-trace-sampling HOLLIGHT_DIR=/path/to/hol-light
 ```
 
 This compiles the collector in this checkout into a synthetic fixture and
-checks the defaults, explicit configuration and sealing, shortest-first
+checks the defaults, explicit configuration and sealing, the output location,
+failed proofs, shortest-first
 selection and arrival-order ties, one and five buckets, borrowing, lazy
 arguments, conversion retention, the size filters, and the refusal to
 overwrite output.

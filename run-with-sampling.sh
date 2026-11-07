@@ -18,6 +18,8 @@ COMMAND receives --tactictrace-config PATH, the file holding these settings.
 It must be built from source that includes sampling_runtime.ml, which reads
 that file before any proof code runs. After the command, the settings and the
 collected output are checked against each other. DIR must not already exist.
+DIR holds the settings, the traces in DIR/traces and their summary in
+DIR/traces.sampling.json.
 
 Exit status:
   64      The runner rejected the options, DIR, COMMAND or its own setup;
@@ -138,7 +140,7 @@ mkdir -p -- "$(dirname -- "$output_root")" && mkdir -- "$output_root" ||
     fail "cannot create the output root: $output_root"
 output_root=$(cd -- "$output_root" && pwd -P)
 config_file="$output_root/.tactictrace-config"
-(umask 077; printf '%s\n' 'tactictrace-sampling-config' "$output_root" \
+(umask 077; printf '%s\n' 'tactictrace-sampling-config' "$output_root/traces" \
     "$quotas" "$backfill" > "$config_file")
 
 code=0
