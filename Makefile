@@ -27,6 +27,7 @@ TESTS =\
 
 TEST_OUTPUTS = $(TESTS:.ml=.outdir)
 LAZY_TACTIC_ARGS_TEST = tests/lazy_tactic_args.native
+SAMPLING_RUN_DIR = tests/_sampling_runner
 
 
 all: types_test tracer
@@ -57,7 +58,7 @@ ocamlTypes.cmo: ocamlTypes.ml
 
 # Collect the traces of the examples, then compare them against the expected
 # traces in examples/*.answer .
-test: test-examples test-lazy-tactic-args test-trace-sampling test-sampling-runner
+test: test-examples test-lazy-tactic-args test-trace-sampling test-sampling-runner test-sampling-runner-e2e
 
 test-examples: $(TEST_OUTPUTS)
 	HOLLIGHT_DIR=$(HOLLIGHT_DIR) ./check-answers.sh
@@ -78,6 +79,18 @@ $(LAZY_TACTIC_ARGS_TEST): tests/lazy_tactic_args_wrapped.ml
 test-sampling-runner:
 	python3 -B -m unittest discover -s tests -p 'test_sampling_runner.py' -v
 	python3 -B -m unittest discover -s tests -p 'test_sampling_runtime.py' -v
+
+# Run the real examples/tactic.native through the runner, which checks the
+# traces it writes against the sampling summary. The output root must be new,
+# so remove the previous run first.
+test-sampling-runner-e2e: examples/tactic.outdir
+	rm -rf $(SAMPLING_RUN_DIR)
+	mkdir -p $(SAMPLING_RUN_DIR)
+	bash run-with-sampling.sh --trace-success-quotas 1,1,1,1,1 \
+	  --trace-output-root $(abspath $(SAMPLING_RUN_DIR))/run \
+	  -- examples/tactic.native > $(SAMPLING_RUN_DIR)/run.log \
+	  || { tail -n 30 $(SAMPLING_RUN_DIR)/run.log; exit 1; }
+	tail -n 1 $(SAMPLING_RUN_DIR)/run.log
 
 # Use a fresh build for each invocation, including when HOL Light changes.
 test-trace-sampling:
@@ -101,5 +114,6 @@ clean:
 	rm -f *.cmo *.cmi tracer types_test types_parser.ml types_parser.mli types_lexer.ml kernel_wrapper.ml
 	rm -rf $(TEST_OUTPUTS) examples/*.cm* examples/*_inlined* examples/*.o examples/*.hollog examples/*.native
 	rm -f tests/lazy_tactic_args_wrapped.ml tests/lazy_tactic_args.cm* tests/lazy_tactic_args.o tests/lazy_tactic_args.hollog $(LAZY_TACTIC_ARGS_TEST)
+	rm -rf $(SAMPLING_RUN_DIR)
 
-.PHONY: all clean test test-examples test-lazy-tactic-args test-trace-sampling test-sampling-runner
+.PHONY: all clean test test-examples test-lazy-tactic-args test-trace-sampling test-sampling-runner test-sampling-runner-e2e

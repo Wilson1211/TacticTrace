@@ -63,15 +63,22 @@ A finished run leaves:
 
 ```text
 <output-root>/
-  .tactictrace-config          # The settings the runner passed in
-  .tactictrace-config.accepted # Written by the proof once it accepts them
-  proof.ml/                    # One JSON file per tactic and per conversion
-  proof.ml.sampling.json       # The sampling summary: settings and per-tactic counts
+  .tactictrace-config           # The settings the runner passed in
+  .tactictrace-config.accepted  # Written by the proof once it accepts them
+  tactic.outdir/                # One JSON file per tactic and per conversion
+  tactic.outdir.sampling.json   # The sampling summary: settings and per-tactic counts
 ```
+
+The name `tactic.outdir` is the basename of the dump directory compiled into the
+proof (here, from `examples/tactic.ml`); a proof built from another file uses
+its own name.
 
 The runner then checks that the proof accepted the settings and that every
 sampling summary matches them: the quotas, the borrowing flag, the per-bucket counts,
-and a records directory in the right place. A proof built without
+and a records directory in the right place. It also counts the records in each
+`<tactic>.json` and compares the number with the retained total in the summary.
+A tactic that kept no records has no file, so a missing file is accepted only
+when the summary reports zero retained records for it. A proof built without
 `sampling_runtime.ml` cannot write the acceptance file, so it cannot be
 mistaken for a configured run.
 
@@ -85,10 +92,16 @@ be checked after it runs.
 
 | Situation | Exit status |
 | --- | --- |
-| Bad options, or an output root that is not new and absolute | 2 |
-| The executable cannot read the settings | 2 |
-| The proof itself failed | the proof's own status |
+| The runner rejects something and runs nothing: bad options, an output root that is not new and absolute or cannot be created, a `.native` that cannot read the settings, a missing checker | 64 |
 | Settings or output missing or not matching | 1 |
+| The command itself failed | the command's own status |
+
+The runner's own errors use 64 because other statuses are taken: an OCaml
+program that dies from an uncaught exception exits with 2, which would be
+indistinguishable from a runner error. Whatever status the checker uses
+internally, the runner reports 1 when it fails. A command that happens to exit
+with 64 or 1 cannot be told apart from a runner error by status alone; the
+message on standard error says which one it was.
 
 Nothing is created for an invalid invocation. When a run fails after starting,
 its directory is left in place to inspect; pick a new one to retry.
@@ -97,9 +110,16 @@ its directory is left in place to inspect; pick a new one to retry.
 
 ```sh
 make test-sampling-runner
+make test-sampling-runner-e2e
 ```
 
-This runs the script against a stand-in command and compiles
+The first runs the script against a stand-in command and compiles
 `sampling_runtime.ml` against a small stub of the collector API, so it needs
-neither HOL Light nor a real proof. `make test` includes it, and GitHub CI runs
-it as its own step.
+neither HOL Light nor a real proof. It needs `ocamlc` on `PATH` and fails
+without it.
+
+The second runs the real `examples/tactic.native` through the runner with
+quotas `1,1,1,1,1`, writing under `tests/_sampling_runner/`, so the checker
+sees output from the actual collector. It needs the HOL Light build described
+in the README. `make test` includes both, and GitHub CI runs each as its own
+step.

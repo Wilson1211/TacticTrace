@@ -9,6 +9,9 @@ import tempfile
 import unittest
 
 
+# Exit status of an error the runner itself reports. A program that dies from an
+# uncaught OCaml exception exits 2, so 2 would be ambiguous.
+RUNNER_ERROR = 64
 RUNNER = Path(__file__).resolve().parents[1] / "run-with-sampling.sh"
 FIXTURE = Path(__file__).resolve().with_name("sampling_runner_fixture.py")
 
@@ -35,7 +38,7 @@ class SamplingRunnerTests(unittest.TestCase):
         return self.fixture("collect", "an argument with spaces", "$(not-a-shell-command)")
 
     def summary(self, root=None):
-        return json.loads(((root or self.root) / "proof.sampling.json").read_text())
+        return json.loads(((root or self.root) / "proof.outdir.sampling.json").read_text())
 
     def received(self, root=None):
         return json.loads(((root or self.root) / "received.json").read_text())
@@ -102,25 +105,25 @@ class SamplingRunnerTests(unittest.TestCase):
         for flags in cases:
             with self.subTest(flags=flags):
                 result = self.run_wrapper(["--trace-output-root", str(self.root), *flags])
-                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(result.returncode, RUNNER_ERROR, result.stderr)
                 self.assertFalse(self.root.exists())
 
     def test_requires_absolute_new_output_root(self):
         for flags in ([], ["--trace-output-root", "relative"],
                       ["--trace-output-root", str(self.root) + "\n"]):
             result = self.run_wrapper(flags)
-            self.assertEqual(result.returncode, 2)
+            self.assertEqual(result.returncode, RUNNER_ERROR)
         self.root.mkdir()
         marker = self.root / "keep.txt"
         marker.write_text("original")
         result = self.run_wrapper(["--trace-output-root", str(self.root)])
-        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.returncode, RUNNER_ERROR)
         self.assertEqual(marker.read_text(), "original")
 
     def test_dangling_symlink_is_not_an_available_output_root(self):
         self.root.symlink_to(Path(self.temp.name) / "missing")
         result = self.run_wrapper(["--trace-output-root", str(self.root)])
-        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.returncode, RUNNER_ERROR)
         self.assertTrue(self.root.is_symlink())
 
     def test_native_without_the_settings_protocol_is_not_run(self):
@@ -130,7 +133,7 @@ class SamplingRunnerTests(unittest.TestCase):
         native.chmod(0o755)
         result = self.run_wrapper(["--trace-output-root", str(self.root)],
                                   [str(native)])
-        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.returncode, RUNNER_ERROR)
         self.assertIn("rebuild the proof", result.stderr)
         self.assertFalse(marker.exists())
         self.assertFalse(self.root.exists())
@@ -148,7 +151,7 @@ class SamplingRunnerTests(unittest.TestCase):
     def test_reserved_argument_is_rejected_before_execution(self):
         result = self.run_wrapper(["--trace-output-root", str(self.root)],
                                   self.fixture("exit", "0", "--tactictrace-config", "fake"))
-        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.returncode, RUNNER_ERROR)
         self.assertFalse(self.root.exists())
 
     def test_failed_command_returns_its_status_and_keeps_output(self):
@@ -170,12 +173,12 @@ class SamplingRunnerTests(unittest.TestCase):
                                   self.fixture("unconfigured"))
         self.assertEqual(result.returncode, 1)
         self.assertIn("did not accept", result.stderr)
-        self.assertTrue((self.root / "proof.sampling.json").is_file())
+        self.assertTrue((self.root / "proof.outdir.sampling.json").is_file())
 
     def test_requires_command_separator_and_command(self):
         for args in ([], ["--trace-success-no-backfill"], ["--"]):
             result = subprocess.run(["bash", str(RUNNER), *args], capture_output=True)
-            self.assertEqual(result.returncode, 2)
+            self.assertEqual(result.returncode, RUNNER_ERROR)
 
     def test_incomplete_summary_is_not_a_successful_run(self):
         result = self.run_wrapper(["--trace-output-root", str(self.root)],
@@ -199,6 +202,60 @@ class SamplingRunnerTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertIn("completion check failed", result.stderr)
 
+    def test_trace_file_must_hold_the_reported_number_of_records(self):
+        for name, changes in {"too-few": {"trace_count": 3},
+                              "too-many": {"trace_count": 6}}.items():
+            with self.subTest(name=name):
+                root = Path(self.temp.name) / name
+                result = self.run_wrapper(
+                    ["--trace-success-quotas", "1,1,1,1,1", "--trace-output-root", str(root)],
+                    self.fixture("mismatch", json.dumps(changes)))
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("sample.json has", result.stderr)
+
+    def test_missing_trace_file_is_allowed_only_when_nothing_was_retained(self):
+        # Only the first bucket sees records for "unfilled", and it has no places.
+        result = self.run_wrapper(
+            ["--trace-success-quotas", "0,2,0,0,0", "--trace-output-root", str(self.root)],
+            self.fixture("collect", "unfilled"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        trace_dir = self.root / "proof.outdir"
+        self.assertTrue((trace_dir / "sample.json").is_file())
+        self.assertFalse((trace_dir / "unfilled.json").exists())
+        # A tactic that retained records must have its file.
+        root = Path(self.temp.name) / "missing-file"
+        result = self.run_wrapper(
+            ["--trace-success-quotas", "1,1,1,1,1", "--trace-output-root", str(root)],
+            self.fixture("mismatch", json.dumps({"no_trace_file": True})))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("sample.json has 0 records", result.stderr)
+
+    def test_checker_failure_status_is_one_whatever_the_checker_returns(self):
+        runner_dir = Path(self.temp.name) / "runner copy"
+        runner_dir.mkdir()
+        shutil.copyfile(RUNNER, runner_dir / RUNNER.name)
+        (runner_dir / "check-sampling-output.py").write_text("import sys\nsys.exit(2)\n")
+        result = self.run_wrapper(["--trace-output-root", str(self.root)],
+                                  self.fake_collector(), runner=runner_dir / RUNNER.name)
+        self.assertEqual(result.returncode, 1, result.stderr)
+
+    def test_a_command_exiting_with_two_keeps_its_own_status(self):
+        result = self.run_wrapper(["--trace-output-root", str(self.root)],
+                                  self.fixture("exit", "2"))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("Command failed (2)", result.stderr)
+
+    def test_output_root_below_a_file_fails_before_creating_anything(self):
+        blocker = Path(self.temp.name) / "a file"
+        blocker.write_text("not a directory")
+        for root in (blocker / "run", blocker / "deeper" / "run"):
+            with self.subTest(root=root):
+                result = self.run_wrapper(["--trace-output-root", str(root)],
+                                          self.fake_collector())
+                self.assertEqual(result.returncode, RUNNER_ERROR, result.stderr)
+                self.assertIn("is not a directory", result.stderr)
+        self.assertEqual(blocker.read_text(), "not a directory")
+
     def test_validator_is_found_beside_runner_from_another_working_directory(self):
         runner_dir = Path(self.temp.name) / "runner copy"
         runner_dir.mkdir()
@@ -211,14 +268,14 @@ class SamplingRunnerTests(unittest.TestCase):
             runner=Path("..") / runner_dir.name / RUNNER.name, cwd=cwd,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue((self.root / "proof.sampling.json").is_file())
+        self.assertTrue((self.root / "proof.outdir.sampling.json").is_file())
 
     def test_missing_validator_fails_before_creating_output(self):
         runner = Path(self.temp.name) / RUNNER.name
         shutil.copyfile(RUNNER, runner)
         result = self.run_wrapper(["--trace-output-root", str(self.root)],
                                   self.fake_collector(), runner=runner)
-        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(result.returncode, RUNNER_ERROR, result.stderr)
         self.assertIn("validator is missing", result.stderr)
         self.assertFalse(self.root.exists())
 

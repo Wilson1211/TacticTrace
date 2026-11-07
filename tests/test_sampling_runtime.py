@@ -29,8 +29,7 @@ FOOTER = '''let () =
   Printf.printf "%s\\n%b\\n"
     (match config.output_root with None -> "<embedded>" | Some path -> path)
     config.backfill;
-  print_endline (String.concat "," (Array.to_list (Array.map string_of_int config.bucket_quotas)));
-  Array.iter print_endline sampling_runtime_arguments;;
+  print_endline (String.concat "," (Array.to_list (Array.map string_of_int config.bucket_quotas)));;
 '''
 
 
@@ -39,7 +38,9 @@ class SamplingRuntimeTests(unittest.TestCase):
     def setUpClass(cls):
         compiler = shutil.which("ocamlc")
         if compiler is None:
-            raise unittest.SkipTest("OCaml compiler is not installed")
+            raise AssertionError(
+                "ocamlc was not found on PATH. These tests compile sampling_runtime.ml, "
+                "so install OCaml or put the HOL Light opam switch's bin directory on PATH.")
         cls.temp = tempfile.TemporaryDirectory(prefix="sampling-runtime-test-")
         directory = Path(cls.temp.name)
         source = directory / "runtime.ml"
@@ -72,7 +73,6 @@ class SamplingRuntimeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines()[:3],
                          [root, "false", "2,2,2,2,2"])
-        self.assertEqual(result.stdout.splitlines()[4:], ["an argument", "last argument"])
         self.assertEqual(accepted.read_text(), "tactictrace-sampling-config\n")
 
     def test_empty_settings_mean_the_collector_defaults(self):

@@ -18,12 +18,18 @@ COMMAND receives --tactictrace-config PATH, the file holding these settings.
 It must be built from source that includes sampling_runtime.ml, which reads
 that file before any proof code runs. After the command, the settings and the
 collected output are checked against each other. DIR must not already exist.
+
+Exit status:
+  64      The runner rejected the options, DIR, COMMAND or its own setup;
+          the command was not run
+  1       The command ran, but its output does not match the settings
+  other   The command failed; this is its own exit status
 USAGE
 }
 
 fail() {
     printf 'Error: %s\n' "$*" >&2
-    exit 2
+    exit 64
 }
 
 quotas=
@@ -81,6 +87,13 @@ done
 case "$(basename -- "$output_root")" in
     .|..) fail 'the output root must name a new directory, not . or ..' ;;
 esac
+# Find the closest part of the path that exists; mkdir -p cannot go through a file.
+ancestor=$(dirname -- "$output_root")
+while [[ ! -e "$ancestor" && ! -L "$ancestor" ]]; do
+    ancestor=$(dirname -- "$ancestor")
+done
+[[ -d "$ancestor" ]] ||
+    fail "cannot create the output root: $ancestor is not a directory"
 
 printf 'Bucket quotas: %s\nBorrowing: %s\n' "${quotas:-4,4,4,4,4 (default)}" \
     "$([[ "$backfill" == 1 ]] && echo on || echo off)"
@@ -121,8 +134,8 @@ if command.name.endswith(".native"):
 PYGATE
 
 # mkdir is exclusive; failed runs retain their settings and partial output.
-mkdir -p -- "$(dirname -- "$output_root")"
-mkdir -- "$output_root"
+mkdir -p -- "$(dirname -- "$output_root")" && mkdir -- "$output_root" ||
+    fail "cannot create the output root: $output_root"
 output_root=$(cd -- "$output_root" && pwd -P)
 config_file="$output_root/.tactictrace-config"
 (umask 077; printf '%s\n' 'tactictrace-sampling-config' "$output_root" \

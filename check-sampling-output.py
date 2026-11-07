@@ -45,6 +45,19 @@ def effective_quotas(quotas, seen):
     return targets
 
 
+def count_records(path):
+    """Count the records in a trace file: one object per entry of its list."""
+    text = path.read_text()
+    try:
+        records = json.loads(text)
+    except ValueError:
+        # OCaml's String.escaped can write escapes that JSON does not have.
+        # Each record opens with a line holding only "  {" at the top level.
+        return text.splitlines().count("  {")
+    require(isinstance(records, list), f"invalid trace file: {path.name}")
+    return len(records)
+
+
 def check_output(root, quotas, backfill):
     accepted = root / ".tactictrace-config.accepted"
     require(accepted.is_file() and accepted.read_text() == ACCEPTANCE,
@@ -68,6 +81,10 @@ def check_output(root, quotas, backfill):
                 all(type(value) is int for value in data["bucket_capacities"]) and
                 data["bucket_capacities"] == expected and sum(expected) == total,
                 f"bucket quota settings do not match: {path.name}")
+        target = Path(data["actual_output_path"])
+        require(target.parent == root and target.is_dir() and
+                path == Path(str(target) + ".sampling.json"),
+                f"invalid trace output path: {path.name}")
         tactics = data["tactics"]
         require(isinstance(tactics, dict), f"invalid tactic counters: {path.name}")
         for name, stats in tactics.items():
@@ -91,10 +108,13 @@ def check_output(root, quotas, backfill):
             if backfill:
                 require(stats["effective_bucket_capacities"] == targets,
                         f"effective quotas do not match: {path.name}:{name}")
-        target = Path(data["actual_output_path"])
-        require(target.parent == root and target.is_dir() and
-                path == Path(str(target) + ".sampling.json"),
-                f"invalid trace output path: {path.name}")
+            # The dump writes <tactic>.json only for a tactic that kept at
+            # least one record, so a missing file means zero records.
+            trace_file = target / f"{name}.json"
+            records = count_records(trace_file) if trace_file.is_file() else 0
+            require(records == sum(retained),
+                    f"{trace_file} has {records} records, "
+                    f"but the summary reports {sum(retained)} retained")
 
 
 def main():

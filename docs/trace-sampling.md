@@ -68,8 +68,8 @@ raises instead of changing a run that is already under way.
 
 ## Output
 
-`exptrace_dump "/path/proof.ml"` writes one JSON file per tactic and per
-conversion into `/path/proof.ml/`. Records are written shortest conclusion
+`exptrace_dump "/path/tactic.outdir"` writes one JSON file per tactic and per
+conversion into `/path/tactic.outdir/`. Records are written shortest conclusion
 first, and newest first among records of equal length.
 
 With `output_root` set, the dump is redirected and also writes a **sampling
@@ -79,9 +79,13 @@ directory so that it is never mistaken for a tactic's records.
 
 ```text
 /absolute/path/to/new-run/
-  proof.ml/                # One JSON file per tactic and per conversion
-  proof.ml.sampling.json   # The sampling summary
+  tactic.outdir/                # One JSON file per tactic and per conversion
+  tactic.outdir.sampling.json   # The sampling summary
 ```
+
+Both names come from the basename of the directory passed to `exptrace_dump`,
+which `modify-proof.sh` compiles into the proof; `tactic.outdir` is the one
+for `examples/tactic.ml`. A tactic that kept no records gets no file.
 
 The sampling summary reports the borrowing flag, the total capacity, the bucket
 names and quotas, the requested and actual output paths, and, for each tactic,

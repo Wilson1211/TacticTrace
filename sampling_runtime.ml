@@ -8,7 +8,7 @@ unset_jrh_lexer;;
    tell whether that proof can read settings at all. *)
 let sampling_config_header = "tactictrace-sampling-config";;
 
-let sampling_runtime_arguments =
+let () =
   let fail message = invalid_arg ("tactictrace runtime config: " ^ message) in
   let quota value =
     if value = "" || (String.length value > 1 && value.[0] = '0') ||
@@ -46,15 +46,15 @@ let sampling_runtime_arguments =
       0o600 (path ^ ".accepted") in
     Fun.protect ~finally:(fun () -> close_out acceptance) (fun () ->
       output_string acceptance (sampling_config_header ^ "\n")) in
-  let rec parse config kept = function
-    | [] -> (config, List.rev kept)
+  let rec find_config config = function
+    | [] -> config
     | "--tactictrace-config" :: path :: rest ->
       if config <> None then fail "duplicate --tactictrace-config argument";
-      parse (Some path) kept rest
+      find_config (Some path) rest
     | ["--tactictrace-config"] -> fail "missing --tactictrace-config path"
-    | argument :: rest -> parse config (argument :: kept) rest in
-  let config, arguments = parse None [] (Array.to_list Sys.argv) in
-  (match config with None -> () | Some path -> read_config path);
-  Array.of_list arguments;;
+    | _ :: rest -> find_config config rest in
+  match find_config None (Array.to_list Sys.argv) with
+  | None -> ()
+  | Some path -> read_config path;;
 
 set_jrh_lexer;;
