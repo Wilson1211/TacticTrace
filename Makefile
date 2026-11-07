@@ -16,9 +16,17 @@ HOLLIGHT_DIR?=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))/..
 # `eval $(opam env)`.
 # $(HOLLIGHT_DIR) normally ends in '/..', so normalize it before testing for the
 # directory: the unnormalized form is not matched by $(wildcard) on every make.
+# GNU Make 3.81, which macOS ships, looks up a recipe command that runs without
+# a shell in the PATH that make started with and ignores the exported one, so
+# the tools that recipes run directly are also given by their full path.
+# $(OCAMLC) stays a bare name because recipes pass it to ocamlfind, which runs
+# it with the exported PATH.
 OPAM_BIN := $(abspath $(HOLLIGHT_DIR)/_opam/bin)
 ifneq ($(wildcard $(OPAM_BIN)),)
   export PATH := $(OPAM_BIN):$(PATH)
+  OCAMLFIND := $(OPAM_BIN)/ocamlfind
+  OCAMLLEX := $(OPAM_BIN)/ocamllex
+  OCAMLYACC := $(OPAM_BIN)/ocamlyacc
 endif
 
 TESTS =\
@@ -35,7 +43,7 @@ tracer: $(TYPES_OBJECTS) tracer.ml
 	$(OCAMLFIND) $(OCAMLC) -package compiler-libs.common $(OCAMLCPARAM) -linkpkg -o tracer $^
 
 types_test: $(TYPES_OBJECTS) types_test.ml
-	$(OCAMLC) $(OCAMLCPARAM) -o $@ $^
+	$(OCAMLFIND) $(OCAMLC) $(OCAMLCPARAM) -o $@ $^
 
 types_parser.ml types_parser.mli: types_parser.mly
 	$(OCAMLYACC) types_parser.mly
