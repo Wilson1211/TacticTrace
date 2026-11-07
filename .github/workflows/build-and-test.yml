@@ -125,6 +125,20 @@ jobs:
           eval $(opam env --switch "$PWD" --set-switch)
           make test-trace-sampling -C TacticTrace
 
+      - name: Check the sampling runner
+        working-directory: hol-light
+        run: |
+          set -xe
+          eval $(opam env --switch "$PWD" --set-switch)
+          make test-sampling-runner -C TacticTrace
+
+      - name: Run the sampling runner on a real proof
+        working-directory: hol-light
+        run: |
+          set -xe
+          eval $(opam env --switch "$PWD" --set-switch)
+          make test-sampling-runner-e2e -C TacticTrace
+
       - name: Upload the collected traces and HOL Light logs
         if: always()
         uses: actions/upload-artifact@v5
@@ -135,4 +149,5 @@ jobs:
             hol-light/TacticTrace/examples/*.hollog
             hol-light/TacticTrace/tests/lazy_tactic_args.hollog
             hol-light/TacticTrace/tests/_trace_sampling/**/*.log
+            hol-light/TacticTrace/tests/_sampling_runner/
           if-no-files-found: ignore

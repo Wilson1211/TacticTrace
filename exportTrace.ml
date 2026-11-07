@@ -46,6 +46,9 @@ module ExportTrace = struct
   (** For tactics **)
 
   (* # records to keep in tac_locs *)
+  (* The five default buckets share this number, so each keeps 4 records
+     (quotas 4,4,4,4,4). The help text and output of run-with-sampling.sh and
+     the docs state that default; update them when this value changes. *)
   let max_num_records = 20
 
   let is_goal_too_large (a_goal:goal): bool =

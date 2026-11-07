@@ -191,10 +191,28 @@ make test
 way the comparison does. Review the resulting diff before committing it, and run
 `make test` again to confirm it now passes.
 
-GitHub Actions runs the example checks, the lazy-argument regression, and the
-sampling suite as separate steps on Ubuntu and macOS. The HOL Light revision is
-pinned in `.github/workflows/build-and-test.yml`. Build and test logs are
-uploaded even when a test fails.
+GitHub Actions runs the example checks, the lazy-argument regression, the
+sampling suite, the sampling runner tests, and a run of the sampling runner on
+`examples/tactic.native` as separate steps on Ubuntu and macOS. The HOL Light
+revision is pinned in `.github/workflows/build-and-test.yml`. Build and test
+logs are uploaded even when a test fails.
+
+## Sampling runner
+
+`run-with-sampling.sh` runs an instrumented proof with sampling settings chosen
+on the command line — the bucket quotas (1 or 5 of them), whether borrowing is
+on, and a new directory for the output — rather than the settings compiled into
+the proof. It passes them to the proof in a file. `modify-proof.sh` embeds
+`sampling_runtime.ml` in the proof, and it reads that file before any proof
+code runs. After the run, the runner checks the collected output against the
+settings. It needs Bash and Python 3, and does
+not build proofs.
+
+See [the sampling runner](docs/trace-sampling-runner.md) for the options and
+the output layout and exit statuses. `make test-sampling-runner` runs its unit
+tests without HOL Light, and `make test-sampling-runner-e2e` runs it on the real
+`examples/tactic.native`. `make test` includes both, and GitHub CI runs each as
+its own step.
 
 ## Versioning and releases
 
