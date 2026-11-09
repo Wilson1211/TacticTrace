@@ -59,7 +59,14 @@ let fixture_main () =
     (* A caller may reuse its array; the collector owns a defensive copy. *)
     Array.fill quotas 0 (Array.length quotas) 0
   end;
-  if scenario = "dump-only" then exptrace_dump () else begin
+  if scenario = "dump-only" then exptrace_dump ()
+  else if scenario = "change-default-dir" then begin
+    exptrace_set_default_dir output;
+    let refused = try exptrace_set_default_dir (output ^ ".other"); false
+      with Invalid_argument _ -> true in
+    assert refused;
+    exptrace_dump ()
+  end else begin
     (* Spread over the first three buckets, far past any of their quotas. *)
     for i = 0 to 179 do
       if scenario = "noise" then add "unrelated" (10000 + i) (i mod 3) 12;

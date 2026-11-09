@@ -251,6 +251,9 @@ class TraceSamplingTests(unittest.TestCase):
             {"dir_override": "{case}/.."},
             {"dir_override": "{case}/traces/"},
             {"dir_override": "/"},
+            {"dir_override": "{case}/original/../traces"},
+            {"dir_override": "{case}/./traces"},
+            {"dir_override": "{case}//traces"},
         ]
         for case in cases:
             with self.subTest(case=case):
@@ -308,9 +311,33 @@ class TraceSamplingTests(unittest.TestCase):
                     if existing == "directory":
                         self.assertEqual((target / "sentinel").read_text(), "keep directory")
                         self.assertEqual(list(target.iterdir()), [target / "sentinel"])
+                        # A refused dump must not leave a summary behind either.
+                        self.assertFalse(summary_path.exists())
                     else:
                         self.assertEqual(summary_path.read_text(), "keep summary")
                         self.assertFalse(target.exists())
+
+    def test_output_collisions_are_refused_before_the_proof(self):
+        # The proof raises "stop" before its dump. A collision must be reported
+        # instead, which shows it was detected when the directory was chosen.
+        for explicit_dir in (False, True):
+            for existing in ("directory", "summary"):
+                if not explicit_dir and existing == "summary":
+                    continue
+                with self.subTest(explicit_dir=explicit_dir, existing=existing):
+                    result, _, _, _ = self.run_fixture(
+                        configure=True, explicit_dir=explicit_dir,
+                        scenario="fail-before-dump", existing=existing)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("already exists", result.stderr)
+                    self.assertNotIn("stop", result.stderr)
+
+    def test_default_directory_cannot_change(self):
+        result, target, summary_path, requested = self.run_fixture(
+            scenario="change-default-dir", configure=True, explicit_dir=False)
+        self.assertEqual(result.returncode, 0, result.stdout[-2000:] + result.stderr)
+        self.assertTrue(requested.is_dir())
+        self.assertFalse(Path(str(requested) + ".other").exists())
 
 
 if __name__ == "__main__":

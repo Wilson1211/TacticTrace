@@ -33,7 +33,9 @@ echo "(* --- sampling_runtime.ml --- *)" >> $output
 cat ${basedir}/sampling_runtime.ml >> $output
 echo "" >> $output
 # The default trace directory, used unless the sampling settings name one.
-echo "exptrace_set_default_dir \"${dumpdir}\";;" >> $output
+# Escape backslashes and double quotes so the path is a valid OCaml string.
+dumpdir_ocaml=$(printf '%s' "$dumpdir" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+printf 'exptrace_set_default_dir "%s";;\n' "$dumpdir_ocaml" >> $output
 tail -n +3 ${output}.org >> $output
 echo "exptrace_dump ();;" >>$output
 

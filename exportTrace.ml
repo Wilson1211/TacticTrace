@@ -138,6 +138,14 @@ module ExportTrace = struct
     bucket_quotas = Array.copy default_bucket_quotas}
   let sampling_config_sealed = ref false
 
+  (* The dump never replaces anything. Checking when the directory is chosen
+     makes a collision fail before the proof runs, not after it. *)
+  let check_output_absent dir ~summary =
+    if Sys.file_exists dir then
+      invalid_arg ("Trace output directory already exists: " ^ dir);
+    if summary && Sys.file_exists (dir ^ ".sampling.json") then
+      invalid_arg ("Sampling summary already exists: " ^ dir ^ ".sampling.json")
+
   let configure_sampling config =
     if !sampling_config_sealed then
       invalid_arg "Trace sampling configuration is sealed after first collection or dump";
@@ -155,9 +163,15 @@ module ExportTrace = struct
        if basename = "" || basename = "." || basename = ".." ||
           dir.[String.length dir - 1] = '/' then
          invalid_arg "Trace output directory must end in a directory name";
+       (* The summary sits next to the directory and is compared by path, so
+          the path must already be in normal form. *)
+       if List.exists (fun c -> c = "" || c = "." || c = "..")
+            (List.tl (String.split_on_char '/' dir)) then
+         invalid_arg "Trace output directory must not contain empty, '.' or '..' components";
        let parent = Filename.dirname dir in
        if not (Sys.file_exists parent) || not (Sys.is_directory parent) then
-         invalid_arg "Parent of the trace output directory must be an existing directory");
+         invalid_arg "Parent of the trace output directory must be an existing directory";
+       check_output_absent dir ~summary:true);
     sampling_config := {config with bucket_quotas = Array.copy config.bucket_quotas}
 
   let get_sampling_config () =
@@ -382,9 +396,17 @@ end;;
 
 (* modify-proof.sh adds a call to this before the proof, with the directory it
    was given. It is the output directory unless the sampling configuration
-   names another. *)
+   names another. A run has one output directory: the default may be set again
+   with the same value, but not changed. *)
 let exptrace_set_default_dir (dir_path:string): unit =
-  ExportTrace.default_output_dir := Some dir_path;;
+  match !ExportTrace.default_output_dir with
+  | Some dir when dir = dir_path -> ()
+  | Some dir ->
+    invalid_arg ("Default trace output directory is already set to " ^ dir)
+  | None ->
+    if (!ExportTrace.sampling_config).output_dir = None then
+      ExportTrace.check_output_absent dir_path ~summary:false;
+    ExportTrace.default_output_dir := Some dir_path;;
 
 let exptrace_add_tac (tactic_name:string)
         (re:ExportTrace.tac_record)
@@ -443,6 +465,7 @@ let exptrace_add_conv (conv_name:string)
 let exptrace_dump (): unit =
   let config = ExportTrace.get_sampling_config () in
   let dir_path = ExportTrace.effective_output_dir config in
+  ExportTrace.check_output_absent dir_path ~summary:(config.output_dir <> None);
   let tac_logs = ExportTrace.sampled_tac_logs config in
   let tac_rec_comp (_,_,i1) (_,_,i2) = ExportTrace.compare_tac_interestingness i1 i2 in
   let conv_logs = ExportTrace.conv_logs in
@@ -552,7 +575,13 @@ let exptrace_dump (): unit =
      ExportTrace.write_sampling_summary oc config dir_path tac_logs;
      close_out oc)
   with exn ->
-    (match summary_channel with None -> () | Some oc -> close_out_noerr oc);
+    (* The summary was created by this dump, so an incomplete one is removed
+       rather than left to block the next run. *)
+    (match summary_channel with
+     | None -> ()
+     | Some oc ->
+       close_out_noerr oc;
+       (try Sys.remove (dir_path ^ ".sampling.json") with Sys_error _ -> ()));
     raise exn;;
 
 (* a helper function *)

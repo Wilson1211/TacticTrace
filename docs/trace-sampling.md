@@ -60,9 +60,11 @@ ExportTrace.configure_sampling {
   the entries must add up to at least 1.
 - `backfill` turns borrowing on or off. It is on by default.
 - `output_dir`, when set, is the directory the dump writes the traces to. It
-  must be an absolute path that ends in a directory name (not `.` or `..`), and
-  its parent must be an existing directory. The dump creates the directory
-  itself and refuses to reuse one that exists, so use a new one for each run.
+  must be an absolute path that ends in a directory name, with no empty, `.`
+  or `..` components, and its parent must be an existing directory. Neither
+  the directory nor its sampling summary may exist yet: this is checked here,
+  before the proof runs, and again by the dump, which creates the directory
+  itself. Use a new one for each run.
   When it is `None`, the dump writes to the default output directory.
 
 The settings are sealed once collection or dumping starts, so a later call
@@ -78,7 +80,9 @@ There is one output directory per run. It is `output_dir` when the
 configuration sets it. Otherwise it is the default output directory, which is
 the third argument of `modify-proof.sh`: the script adds a call to
 `exptrace_set_default_dir` before the proof, and `exptrace_dump ()` as the last
-line. A dump with neither raises `Invalid_argument`.
+line. A dump with neither raises `Invalid_argument`. The default may be set
+again with the same directory but not changed to another one, and without
+`output_dir` it must not already exist.
 
 The dump is an explicit call at the end of the proof, not an `at_exit`
 handler. A proof that fails with an exception never reaches it, so it writes no
@@ -103,7 +107,8 @@ on it also reports the capacity each bucket ended up with.
 
 The dump refuses to replace an existing output directory or, when `output_dir`
 is set, an existing sampling summary, so a finished run cannot be overwritten
-by a later one.
+by a later one. If the dump fails after creating the sampling summary, it
+removes that summary so that it does not block the next run.
 
 ## Tests
 

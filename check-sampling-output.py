@@ -64,59 +64,58 @@ def check_output(root, quotas, backfill):
             "the command did not accept the sampling settings; rebuild it with "
             "sampling_runtime.ml included")
     # The runner sends the traces to <root>/traces and nowhere else.
-    summaries = sorted(root.glob("*.sampling.json"))
-    require(summaries, "no sampling summary was produced")
-    require(summaries == [root / "traces.sampling.json"],
+    path = root / "traces.sampling.json"
+    require(path.is_file(), "no sampling summary was produced")
+    require(sorted(root.glob("*.sampling.json")) == [path],
             "expected exactly one sampling summary, traces.sampling.json")
-    for path in summaries:
-        data = json.loads(path.read_text())
-        require(isinstance(data, dict), f"invalid sampling summary: {path.name}")
-        require(set(data) == SUMMARY_KEYS,
-                f"unexpected sampling summary fields: {path.name}")
-        require(type(data["backfill"]) is bool and data["backfill"] == backfill,
-                f"sampling settings do not match: {path.name}")
-        total = data["total_capacity"]
-        require(type(total) is int and total >= 1,
-                f"invalid total capacity: {path.name}")
-        expected = quotas or [total // 5 + (index < total % 5) for index in range(5)]
-        require(data["bucket_names"] == BUCKET_NAMES[len(expected)] and
-                type(data["bucket_capacities"]) is list and
-                all(type(value) is int for value in data["bucket_capacities"]) and
-                data["bucket_capacities"] == expected and sum(expected) == total,
-                f"bucket quota settings do not match: {path.name}")
-        target = Path(data["output_dir"])
-        require(target == root / "traces" and target.is_dir(),
-                f"invalid trace output directory: {path.name}")
-        tactics = data["tactics"]
-        require(isinstance(tactics, dict), f"invalid tactic counters: {path.name}")
-        for name, stats in tactics.items():
-            buckets = stats["buckets"]
-            require(type(buckets) is list and len(buckets) == len(expected),
+    data = json.loads(path.read_text())
+    require(isinstance(data, dict), f"invalid sampling summary: {path.name}")
+    require(set(data) == SUMMARY_KEYS,
+            f"unexpected sampling summary fields: {path.name}")
+    require(type(data["backfill"]) is bool and data["backfill"] == backfill,
+            f"sampling settings do not match: {path.name}")
+    total = data["total_capacity"]
+    require(type(total) is int and total >= 1,
+            f"invalid total capacity: {path.name}")
+    expected = quotas or [total // 5 + (index < total % 5) for index in range(5)]
+    require(data["bucket_names"] == BUCKET_NAMES[len(expected)] and
+            type(data["bucket_capacities"]) is list and
+            all(type(value) is int for value in data["bucket_capacities"]) and
+            data["bucket_capacities"] == expected and sum(expected) == total,
+            f"bucket quota settings do not match: {path.name}")
+    target = Path(data["output_dir"])
+    require(target == root / "traces" and target.is_dir(),
+            f"invalid trace output directory: {path.name}")
+    tactics = data["tactics"]
+    require(isinstance(tactics, dict), f"invalid tactic counters: {path.name}")
+    for name, stats in tactics.items():
+        buckets = stats["buckets"]
+        require(type(buckets) is list and len(buckets) == len(expected),
+                f"invalid bucket counters: {path.name}:{name}")
+        seen = []
+        retained = []
+        for bucket, bucket_name in zip(buckets, BUCKET_NAMES[len(expected)]):
+            require(bucket["name"] == bucket_name and
+                    type(bucket["eligible_seen"]) is int and
+                    bucket["eligible_seen"] >= 0 and
+                    type(bucket["retained"]) is int and bucket["retained"] >= 0,
                     f"invalid bucket counters: {path.name}:{name}")
-            seen = []
-            retained = []
-            for bucket, bucket_name in zip(buckets, BUCKET_NAMES[len(expected)]):
-                require(bucket["name"] == bucket_name and
-                        type(bucket["eligible_seen"]) is int and
-                        bucket["eligible_seen"] >= 0 and
-                        type(bucket["retained"]) is int and bucket["retained"] >= 0,
-                        f"invalid bucket counters: {path.name}:{name}")
-                seen.append(bucket["eligible_seen"])
-                retained.append(bucket["retained"])
-            targets = effective_quotas(expected, seen) if backfill else [
-                min(quota, count) for quota, count in zip(expected, seen)]
-            require(retained == targets,
-                    f"retention counts do not match: {path.name}:{name}")
-            if backfill:
-                require(stats["effective_bucket_capacities"] == targets,
-                        f"effective quotas do not match: {path.name}:{name}")
-            # The dump writes <tactic>.json only for a tactic that kept at
-            # least one record, so a missing file means zero records.
-            trace_file = target / f"{name}.json"
-            records = count_records(trace_file) if trace_file.is_file() else 0
-            require(records == sum(retained),
-                    f"{trace_file} has {records} records, "
-                    f"but the summary reports {sum(retained)} retained")
+            seen.append(bucket["eligible_seen"])
+            retained.append(bucket["retained"])
+        targets = effective_quotas(expected, seen) if backfill else [
+            min(quota, count) for quota, count in zip(expected, seen)]
+        require(retained == targets,
+                f"retention counts do not match: {path.name}:{name}")
+        if backfill:
+            require(stats["effective_bucket_capacities"] == targets,
+                    f"effective quotas do not match: {path.name}:{name}")
+        # The dump writes <tactic>.json only for a tactic that kept at
+        # least one record, so a missing file means zero records.
+        trace_file = target / f"{name}.json"
+        records = count_records(trace_file) if trace_file.is_file() else 0
+        require(records == sum(retained),
+                f"{trace_file} has {records} records, "
+                f"but the summary reports {sum(retained)} retained")
 
 
 def main():
